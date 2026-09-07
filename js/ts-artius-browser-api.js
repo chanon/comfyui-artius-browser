@@ -29,9 +29,12 @@ import {
     tsGetComfySelectedNodes,
     tsGetComfyVisibleNodes,
     tsGetRelativeAssetPath,
+    tsIsComfyNodeTypeRegistered,
     tsIsGraphPointInsideNode,
     tsMarkComfyGraphDirty,
+    tsRemoveComfyGraphNode,
     tsResolveNodeComfyClass,
+    tsResolveWorkflowTarget,
     tsSplitRelativePath,
 } from "./ts-artius-browser-api-workflow.js";
 import {
@@ -52,6 +55,7 @@ export const tsAssetDragMime = tsApiSettings.assetDragMime;
 
 const tsNativeWorkflowTargets = tsApiSettings.nativeWorkflowTargets;
 const tsFallbackWorkflowTargets = tsApiSettings.fallbackWorkflowTargets;
+const tsPreferredWorkflowTargets = tsApiSettings.preferredWorkflowTargets || {};
 const tsLocaleCache = new Map();
 const tsEnableConsoleDebug = Boolean(tsBrowserRuntimeSettings.enableConsoleDebug);
 const tsWorkflowUserdataRoot = "workflows";
@@ -289,10 +293,21 @@ export async function tsDeleteWorkflowFile(tsRelativePath) {
     return tsPostJSON(`${tsRouteBase}/workflow/delete`, { path: tsNormalizeRelativePath(tsRelativePath) });
 }
 
+// Mirror of the locale most recently loaded here. The panel and the sidebar
+// both go through tsLoadLocale, so this module always holds the strings the
+// user is currently seeing - which is what lets the canvas drop bridge, which
+// runs with no panel instance in reach, phrase its own failure toast.
+let tsActiveLocale = {};
+
+function tsT(tsKey, tsFallback) {
+    return tsActiveLocale?.[tsKey] || tsFallback;
+}
+
 export async function tsLoadLocale(tsLocaleCode = tsProjectSettings.defaultLocale) {
     const tsResolvedCode = tsLocaleCode || tsProjectSettings.defaultLocale;
     if (tsLocaleCache.has(tsResolvedCode)) {
-        return tsLocaleCache.get(tsResolvedCode);
+        tsActiveLocale = tsLocaleCache.get(tsResolvedCode);
+        return tsActiveLocale;
     }
     const tsLocaleURL = new URL(`./localization/${tsResolvedCode}.json`, import.meta.url);
     try {
@@ -302,6 +317,7 @@ export async function tsLoadLocale(tsLocaleCode = tsProjectSettings.defaultLocal
         }
         const tsPayload = await tsResponse.json();
         tsLocaleCache.set(tsResolvedCode, tsPayload);
+        tsActiveLocale = tsPayload;
         return tsPayload;
     } catch (tsError) {
         if (tsResolvedCode !== tsProjectSettings.defaultLocale) {
@@ -478,6 +494,93 @@ async function tsApplyNativeAssetToNode(tsNode, tsAsset, tsWidgetNames) {
     return tsSetWidgetValue(tsNode, tsNativeWidget, tsNativeValue);
 }
 
+function tsResolveTargetForAsset(tsAssetType) {
+    const tsNativeTarget = tsNativeWorkflowTargets[tsAssetType] || tsFallbackWorkflowTargets[tsAssetType] || null;
+    return tsResolveWorkflowTarget(
+        tsAssetType,
+        tsPreferredWorkflowTargets,
+        tsNativeTarget,
+        (tsNodeType) => tsIsComfyNodeTypeRegistered(tsNodeType, tsComfyAdapterDeps()),
+    );
+}
+
+function tsFindTargetWidget(tsNode, tsTarget) {
+    const tsWidget = tsFindWidget(tsNode, tsTarget.tsWidgetNames);
+    if (tsWidget) {
+        return tsWidget;
+    }
+    // A node that renders its own interface may have taken the input out of
+    // node.widgets and stashed it elsewhere; that stashed widget is still the
+    // one its workflow serialization reads, so writing node.properties alone
+    // fills the visible interface and queues an EMPTY input.
+    const tsStash = tsTarget.tsHiddenWidgetStash ? tsNode?.[tsTarget.tsHiddenWidgetStash] : null;
+    if (!tsStash || typeof tsStash !== "object") {
+        return null;
+    }
+    for (const tsName of tsTarget.tsWidgetNames) {
+        if (tsStash[tsName]) {
+            return tsStash[tsName];
+        }
+    }
+    return null;
+}
+
+async function tsWaitForTargetWidget(tsNode, tsTarget, tsAttempts = 40) {
+    // Same poll as tsWaitForWidget, but through the stash-aware lookup: a node
+    // that builds its own interface removes the input from node.widgets during
+    // creation, so both places have to be watched at once.
+    for (let tsAttempt = 0; tsAttempt < tsAttempts; tsAttempt += 1) {
+        const tsWidget = tsFindTargetWidget(tsNode, tsTarget);
+        if (tsWidget) {
+            return tsWidget;
+        }
+        await tsDelay(50);
+    }
+    return null;
+}
+
+async function tsApplyPathTargetToNode(tsNode, tsAsset, tsTarget) {
+    // The node reads the file straight off the ComfyUI machine, so there is no
+    // copy into input/ and no combo list to keep in step - just the absolute
+    // path the index already holds.
+    const tsPathValue = String(tsAsset?.path || "");
+    if (!tsNode || !tsPathValue) {
+        return false;
+    }
+    const tsWidget = await tsWaitForTargetWidget(tsNode, tsTarget);
+    if (!tsWidget) {
+        return false;
+    }
+    tsSetWidgetValue(tsNode, tsWidget, tsPathValue);
+    // Second channel: nodes that hide their inputs mirror them into properties
+    // and restore from there. Writing both keeps the two in step whichever one
+    // the node consults.
+    tsNode.properties = tsNode.properties || {};
+    for (const tsName of tsTarget.tsWidgetNames) {
+        if (tsName === tsWidget.name) {
+            tsNode.properties[tsName] = tsPathValue;
+        }
+    }
+    const tsRefresh = tsTarget.tsRefreshHook ? tsNode?.[tsTarget.tsRefreshHook] : null;
+    if (typeof tsRefresh === "function") {
+        try {
+            tsRefresh.call(tsNode);
+        } catch (tsError) {
+            // The value is already in place; only the node's own redraw failed.
+            tsConsoleWarn("Timesaver Artius Browser preferred target refresh failed", tsError);
+        }
+    }
+    tsMarkComfyGraphDirty(tsComfyAdapterDeps());
+    return true;
+}
+
+function tsApplyTargetAssetToNode(tsNode, tsAsset, tsTarget) {
+    if (tsTarget?.tsValueKind === "path") {
+        return tsApplyPathTargetToNode(tsNode, tsAsset, tsTarget);
+    }
+    return tsApplyNativeAssetToNode(tsNode, tsAsset, tsTarget.tsWidgetNames);
+}
+
 async function tsSyncNative3DNode(tsNode, tsAsset) {
     const tsNodeClass = String(tsNode?.comfyClass || tsNode?.constructor?.comfyClass || "");
     if (!tsNode || tsNodeClass !== tsNativeWorkflowTargets["3d"]?.tsNodeType || tsAsset?.type !== "3d") {
@@ -609,12 +712,15 @@ async function tsTryLoadIntoSelectedNode(tsAsset, tsExcludedNodes = []) {
 }
 
 async function tsCreateWorkflowNode(tsAsset, tsEvent = undefined, tsPositionOverride = null) {
-    const tsNativeTarget = tsNativeWorkflowTargets[tsAsset.type] || null;
-    const tsFallbackTarget = tsFallbackWorkflowTargets[tsAsset.type] || null;
-    const tsTarget = tsNativeTarget || tsFallbackTarget;
+    // A pack installed alongside the browser may publish a better loader for
+    // this asset type; the native ComfyUI node is what everyone else gets.
+    const tsTarget = tsResolveTargetForAsset(tsAsset.type);
     if (!tsTarget) {
         return false;
     }
+    // Unchanged from before preferred targets existed: the asset_id/path branch
+    // below is for a fallback descriptor, i.e. a type with no native loader.
+    const tsIsLoaderTarget = tsTarget !== tsFallbackWorkflowTargets[tsAsset.type];
     const tsDeps = tsComfyAdapterDeps();
     const tsNode = tsCreateComfyGraphNode(tsTarget.tsNodeType, tsDeps);
     if (!tsNode) {
@@ -628,12 +734,25 @@ async function tsCreateWorkflowNode(tsAsset, tsEvent = undefined, tsPositionOver
         : (tsGetComfyCanvasDropGraphPosition(tsEvent, tsDeps) || [160, 160]);
     tsNode.pos = tsPosition;
     window.setTimeout(async () => {
-        if (tsNativeTarget) {
-            if (tsAsset?.type === "3d") {
-                await tsSyncNative3DNode(tsNode, tsAsset);
+        if (tsIsLoaderTarget && tsAsset?.type === "3d") {
+            await tsSyncNative3DNode(tsNode, tsAsset);
+            return;
+        }
+        if (tsIsLoaderTarget) {
+            if (await tsApplyTargetAssetToNode(tsNode, tsAsset, tsTarget)) {
                 return;
             }
-            await tsApplyNativeAssetToNode(tsNode, tsAsset, tsNativeTarget.tsWidgetNames);
+            // A loader node that could not be filled keeps the FIRST entry of
+            // its own file list - an unrelated asset that looks exactly like
+            // the browser having dropped the wrong file. Take the node back
+            // out and say so instead.
+            tsRemoveComfyGraphNode(tsNode, tsDeps);
+            tsMarkComfyGraphDirty(tsDeps);
+            tsShowToast(
+                "error",
+                tsT("toast.assetLoadFailed", "Could not load the asset into ComfyUI"),
+                String(tsAsset?.filename || ""),
+            );
             return;
         }
         const tsAssetIdWidget = tsFindWidget(tsNode, ["asset_id"]);

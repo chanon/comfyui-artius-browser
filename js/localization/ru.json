@@ -111,6 +111,7 @@
     "toast.copyFailed": "Не удалось скопировать",
     "toast.deleteFailed": "Не удалось удалить",
     "toast.workflowLoadFailed": "Не удалось загрузить воркфлоу",
+    "toast.assetLoadFailed": "Не удалось загрузить ассет в ComfyUI",
     "toast.workflowDeleteFailed": "Не удалось удалить воркфлоу",
     "toast.rescanFailed": "Не удалось выполнить сканирование",
     "toast.rebuildFailed": "Не удалось пересобрать кэш",

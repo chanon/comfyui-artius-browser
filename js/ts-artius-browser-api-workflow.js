@@ -149,6 +149,43 @@ export function tsCreateComfyGraphNode(tsNodeType, tsDeps) {
     return tsLiteGraph.createNode(tsNodeType);
 }
 
+export function tsIsComfyNodeTypeRegistered(tsNodeType, tsDeps) {
+    // Whether THIS ComfyUI knows the node type at all. The registry is the only
+    // synchronous source for it, and a missing registry (or a build that names
+    // it differently) simply means "not installed" - never an error, because
+    // the caller falls back to the native loader.
+    if (!tsNodeType) {
+        return false;
+    }
+    const tsRegistry = tsDeps?.window?.LiteGraph?.registered_node_types;
+    if (!tsRegistry || typeof tsRegistry !== "object") {
+        return false;
+    }
+    return Boolean(tsRegistry[tsNodeType]);
+}
+
+export function tsResolveWorkflowTarget(tsAssetType, tsPreferredTargets, tsNativeTarget, tsIsNodeTypeRegistered) {
+    // First installed preferred target wins; otherwise the native ComfyUI one.
+    const tsCandidates = tsPreferredTargets?.[tsAssetType];
+    if (Array.isArray(tsCandidates)) {
+        for (const tsCandidate of tsCandidates) {
+            if (tsIsNodeTypeRegistered(tsCandidate?.tsNodeType)) {
+                return tsCandidate;
+            }
+        }
+    }
+    return tsNativeTarget || null;
+}
+
+export function tsRemoveComfyGraphNode(tsNode, tsDeps) {
+    const tsGraph = tsGetComfyGraph(tsDeps);
+    if (!tsGraph || typeof tsGraph.remove !== "function" || !tsNode) {
+        return false;
+    }
+    tsGraph.remove(tsNode);
+    return true;
+}
+
 export function tsAddComfyGraphNode(tsNode, tsDeps) {
     const tsGraph = tsGetComfyGraph(tsDeps);
     if (!tsGraph || typeof tsGraph.add !== "function" || !tsNode) {

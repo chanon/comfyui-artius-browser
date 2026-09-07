@@ -150,6 +150,8 @@ This pack doesn't reinvent loaders — it routes drag-and-drop to native nodes:
 exactly like files picked from the node UI. The `Workflows` tab reads
 `user/default/workflows` directly — no separate cache, no parallel index.
 
+When another installed pack publishes a better loader, it wins: a video dropped on the canvas becomes a **TS Video Loader** node (from `comfyui-timesaver`) reading the file where it already sits, instead of a copy landing in `input/`. Without that pack, the native node is created exactly as above.
+
 ### 🔬 Lightbox tour
 
 <details>
@@ -535,6 +537,8 @@ Este pack no reinventa los loaders — redirige el drag-and-drop a los nodos nat
 
 Los archivos 3D se preparan automáticamente en el almacenamiento de input de ComfyUI para que los nodos 3D nativos los vean exactamente como archivos seleccionados desde la UI del nodo. La pestaña `Workflows` lee `user/default/workflows` directamente — sin caché separado, sin índice paralelo.
 
+Si otro pack instalado publica un loader mejor, éste gana: un vídeo soltado en el canvas se convierte en un nodo **TS Video Loader** (de `comfyui-timesaver`) que lee el archivo donde ya está, en lugar de copiarlo a `input/`. Sin ese pack, se crea el nodo nativo exactamente como arriba.
+
 ### 🔬 Recorrido por el lightbox
 
 <details>
@@ -764,6 +768,8 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 | Workflow | 原生前端 workflow 加载器 |
 
 3D 文件会自动暂存到 ComfyUI 的 input 存储中,这样原生 3D 节点看到它们的方式就和从节点 UI 中选择的文件完全一样。`Workflows` 标签页直接读取 `user/default/workflows` — 没有独立缓存,没有并行索引。
+
+如果安装的其他节点包提供了更好的加载器,则优先使用它:拖到画布上的视频会创建 **TS Video Loader** 节点(来自 `comfyui-timesaver`),直接读取文件原位置,而不是复制到 `input/`。没有该节点包时,仍然创建上表中的原生节点。
 
 ### 🔬 灯箱概览
 
@@ -996,6 +1002,8 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 
 3D ファイルは ComfyUI の input ストレージに自動的にステージングされ、ネイティブ 3D ノードからは UI で選択したファイルと全く同じように見えます。`Workflows` タブは `user/default/workflows` を直接読み込み — 別キャッシュも並列インデックスもありません。
 
+他にインストールされたパックがより良いローダーを提供している場合はそちらが優先されます。キャンバスにドロップした動画は **TS Video Loader** ノード(`comfyui-timesaver`)になり、ファイルを `input/` にコピーせず元の場所から読み込みます。そのパックがなければ、上記のネイティブノードがそのまま作成されます。
+
 ### 🔬 ライトボックスツアー
 
 <details>
@@ -1226,6 +1234,8 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 | Workflow | 네이티브 프론트엔드 workflow loader |
 
 3D 파일은 ComfyUI 의 input 저장소에 자동으로 스테이징되어, 네이티브 3D 노드에서는 노드 UI 에서 선택한 파일과 정확히 같은 방식으로 보입니다. `Workflows` 탭은 `user/default/workflows` 를 직접 읽습니다 — 별도 캐시도 병렬 인덱스도 없습니다.
+
+설치된 다른 팩이 더 나은 로더를 제공하면 그쪽이 우선합니다. 캔버스에 드롭한 비디오는 **TS Video Loader** 노드(`comfyui-timesaver`)가 되어 파일을 `input/` 으로 복사하지 않고 원래 위치에서 읽습니다. 해당 팩이 없으면 위의 네이티브 노드가 그대로 생성됩니다.
 
 ### 🔬 라이트박스 둘러보기
 
@@ -1458,6 +1468,8 @@ Dieses Pack erfindet keine Loader neu — es leitet Drag-and-Drop an die nativen
 
 3D-Dateien werden automatisch in den ComfyUI-Input-Speicher gestaged, sodass native 3D-Nodes sie genauso sehen wie Dateien, die aus der Node-UI ausgewählt wurden. Der `Workflows`-Tab liest direkt `user/default/workflows` — kein separater Cache, kein paralleler Index.
 
+Wenn ein anderes installiertes Pack einen besseren Loader bereitstellt, gewinnt dieser: ein auf das Canvas gezogenes Video wird zu einer **TS Video Loader**-Node (aus `comfyui-timesaver`), die die Datei dort liest, wo sie bereits liegt, statt eine Kopie in `input/` abzulegen. Ohne dieses Pack wird die native Node genau wie oben erstellt.
+
 ### 🔬 Lightbox-Tour
 
 <details>
@@ -1688,6 +1700,8 @@ Questo pack non reinventa i loader — instrada il drag-and-drop ai nodi nativi:
 | Workflow | Loader nativo del frontend |
 
 I file 3D vengono automaticamente messi in staging nello storage di input di ComfyUI, così i nodi 3D nativi li vedono esattamente come file selezionati dall'UI del nodo. Il tab `Workflows` legge direttamente `user/default/workflows` — nessuna cache separata, nessun indice parallelo.
+
+Se un altro pack installato pubblica un loader migliore, vince quello: un video trascinato sul canvas diventa un nodo **TS Video Loader** (da `comfyui-timesaver`) che legge il file dove si trova già, invece di copiarlo in `input/`. Senza quel pack viene creato il nodo nativo esattamente come sopra.
 
 ### 🔬 Tour del lightbox
 
@@ -1921,6 +1935,8 @@ Ce pack ne réinvente pas les loaders — il route le glisser-déposer vers les 
 
 Les fichiers 3D sont automatiquement préparés dans le stockage d'input de ComfyUI, de sorte que les nœuds 3D natifs les voient exactement comme des fichiers sélectionnés depuis l'UI du nœud. L'onglet `Workflows` lit `user/default/workflows` directement — pas de cache séparé, pas d'index parallèle.
 
+Si un autre pack installé publie un meilleur loader, c'est lui qui gagne : une vidéo déposée sur le canvas devient un nœud **TS Video Loader** (de `comfyui-timesaver`) qui lit le fichier là où il se trouve déjà, au lieu d'en copier un dans `input/`. Sans ce pack, le nœud natif est créé exactement comme ci-dessus.
+
 ### 🔬 Tour de la lightbox
 
 <details>
@@ -2152,6 +2168,8 @@ Este pack não reinventa loaders — encaminha drag-and-drop para os nós nativo
 | Workflow | Loader nativo do frontend |
 
 Os ficheiros 3D são automaticamente preparados no armazenamento de input do ComfyUI, para que os nós 3D nativos os vejam exactamente como ficheiros seleccionados a partir da UI do nó. O separador `Workflows` lê directamente `user/default/workflows` — sem cache separado, sem índice paralelo.
+
+Se outro pack instalado publicar um loader melhor, é esse que ganha: um vídeo largado no canvas passa a ser um nó **TS Video Loader** (de `comfyui-timesaver`) que lê o ficheiro onde já está, em vez de copiá-lo para `input/`. Sem esse pack, o nó nativo é criado exactamente como acima.
 
 ### 🔬 Tour pelo lightbox
 

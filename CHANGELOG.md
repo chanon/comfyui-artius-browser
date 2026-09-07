@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-09-07
+
+Dragging a video onto the canvas made the browser copy the whole file into
+`input/` first, because that is the only place the native `Load Video` node
+looks. That round trip is gone when TS Video Loader is installed, and when it
+is not, a copy that fails no longer leaves a node holding an unrelated file.
+
+### Added
+
+- **Dragging a video onto the canvas uses TS Video Loader when that pack is
+  installed.** It reads the file where it already sits, so nothing is copied
+  into `input/` and the node opens on its own timeline. Without the pack, the
+  native `Load Video` node is created exactly as before.
+
+### Fixed
+
+- **A loader node that could not be filled no longer keeps somebody else's
+  file.** The native `Load Image` / `Load Video` / `Load Audio` nodes show the
+  first entry of the input directory the moment they are created, so a failed
+  copy of the dragged asset into `input/` left a node pointing at an unrelated
+  file — looking exactly like the browser had dropped the wrong one. The node
+  is now taken back out of the graph and the failure is reported.
+
 ## [1.17.0] - 2026-08-26
 
 Users running ComfyUI and the browser on the same machine reported that a

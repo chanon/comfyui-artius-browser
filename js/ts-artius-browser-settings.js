@@ -33,6 +33,28 @@ export const tsApiSettings = Object.freeze({
         "3d": { tsNodeType: "Load3D", tsWidgetNames: ["model_file"] },
     },
     fallbackWorkflowTargets: {},
+    // Node types PREFERRED over the native ComfyUI loader when the pack that
+    // publishes them is installed in this ComfyUI. Each list is tried in order
+    // and the first entry whose node type is registered wins; with none of them
+    // installed the native target above is used and nothing changes.
+    //
+    // tsValueKind "path" means the node takes the asset's absolute path as it
+    // sits on the ComfyUI machine, so the asset is NOT copied into input/.
+    // tsHiddenWidgetStash / tsRefreshHook are optional surfaces such a node may
+    // expose: a stash of widgets it removed from node.widgets to render its own
+    // interface, and a hook that re-reads the persisted value. Both are read
+    // through optional access - a node without them still gets its value.
+    preferredWorkflowTargets: {
+        video: [
+            {
+                tsNodeType: "TS_VideoLoader",
+                tsWidgetNames: ["source_path"],
+                tsValueKind: "path",
+                tsHiddenWidgetStash: "_tsHiddenWidgets",
+                tsRefreshHook: "_tsVideoLoaderRehydrate",
+            },
+        ],
+    },
 });
 
 export const tsPanelSettings = Object.freeze({

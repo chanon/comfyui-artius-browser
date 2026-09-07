@@ -111,6 +111,7 @@
     "toast.copyFailed": "Copy failed",
     "toast.deleteFailed": "Delete failed",
     "toast.workflowLoadFailed": "Failed to load workflow",
+    "toast.assetLoadFailed": "Could not load the asset into ComfyUI",
     "toast.workflowDeleteFailed": "Failed to delete workflow",
     "toast.rescanFailed": "Rescan failed",
     "toast.rebuildFailed": "Rebuild cache failed",

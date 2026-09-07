@@ -3,7 +3,7 @@
 *Written and maintained by the AI agent building `comfyui-timesaver`. Every
 touched site in the source carries an `[AI agent]` comment.*
 
-The browser has three seams other packs can use. All of them are optional and
+The browser has four seams other packs can use. All of them are optional and
 none of them make the browser depend on anything: with no other pack
 installed, every path below simply yields nothing and the UI is unchanged.
 
@@ -131,7 +131,58 @@ Two things worth knowing:
 
 ---
 
-## 4. Localisation
+## 4. Preferred loader nodes on drop
+
+Dragging an asset onto the canvas creates a loader node. The browser will
+create a node published by ANOTHER pack instead of the native ComfyUI one when
+that node is registered in this ComfyUI; when it is not, the native loader is
+created exactly as before. The list lives in
+`tsApiSettings.preferredWorkflowTargets` (`js/ts-artius-browser-settings.js`),
+one entry per asset type, first installed entry wins.
+
+Today there is one entry: **`TS_VideoLoader`** (TS Video Loader, from
+`comfyui-timesaver`) for videos.
+
+A descriptor:
+
+```js
+{
+    tsNodeType: "TS_VideoLoader",       // registered node type
+    tsWidgetNames: ["source_path"],     // input that receives the asset
+    tsValueKind: "path",                // absolute path, no copy into input/
+    tsHiddenWidgetStash: "_tsHiddenWidgets",
+    tsRefreshHook: "_tsVideoLoaderRehydrate",
+}
+```
+
+What the publishing node has to hold up:
+
+- **`tsValueKind: "path"`** means the node reads the file where it already
+  sits on the ComfyUI machine. This is the whole point of the seam: the native
+  `LoadVideo` takes a filename from the input directory, so the browser has to
+  copy the video into `input/` first — a full download-and-upload round trip
+  per drag, and a wrong file left in the node when it fails.
+- **`tsHiddenWidgetStash`** is where the node keeps inputs it removed from
+  `node.widgets` to draw its own interface. That stashed widget, not
+  `node.properties`, is what the workflow serializes: writing properties alone
+  fills the node's interface and queues an EMPTY input. The browser writes
+  both and looks in `node.widgets` first, so a node that hides nothing needs
+  neither field.
+- **`tsRefreshHook`** is an optional zero-argument method the browser calls
+  after the value is in place, for a node that has to re-read it to redraw.
+  It is called through optional access and a throw costs only the redraw.
+
+Both optional names are read off the node object and never imported, so a
+rename in the publishing pack costs the drop-target behaviour and nothing
+else — the browser falls back to its native loader.
+
+Source: `tsResolveTargetForAsset` / `tsApplyPathTargetToNode`
+(`js/ts-artius-browser-api.js`), `tsResolveWorkflowTarget` /
+`tsIsComfyNodeTypeRegistered` (`js/ts-artius-browser-api-workflow.js`).
+
+---
+
+## 5. Localisation
 
 Keys added for this integration live in `js/localization/{en,ru,ja,zh}.json`:
 
@@ -146,7 +197,7 @@ is expected, not a missing translation here.
 
 ---
 
-## 5. Checking a change
+## 6. Checking a change
 
 The install holds a copy of this repo, not a link, so an edit reaches ComfyUI
 only once copied. The studio's repo ships a verifier that covers both packs:
