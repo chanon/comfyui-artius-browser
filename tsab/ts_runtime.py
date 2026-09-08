@@ -222,6 +222,16 @@ class TSAssetBrowserRuntime:
     async def TSRequestScan(self, ts_scope: str | None = None, ts_root_id: str | None = None) -> bool:
         return await self.ts_scan_service.TSRequestScan(ts_scope=ts_scope, ts_root_id=ts_root_id)
 
+    def TSIndexFiles(self, ts_root_id: str, ts_relative_paths: list[str]) -> dict[str, Any]:
+        # The targeted counterpart of TSRequestScan: index exactly the files the
+        # caller names instead of walking their root. Rows come back so the
+        # panel learns about them the same way it does after an on-demand
+        # upsert, without waiting for a scan-complete event.
+        ts_result = self.ts_scan_service.TSIndexFiles(ts_root_id, ts_relative_paths)
+        for ts_row in ts_result.pop("rows", []):
+            self._TSEmitAssetUpsert(ts_row)
+        return ts_result
+
     async def TSRequestCacheRebuild(self) -> dict[str, Any]:
         return await self.ts_scan_service.TSRequestCacheRebuild()
 

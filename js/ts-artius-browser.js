@@ -21,6 +21,10 @@ import { tsResolveLocaleCode } from "./ts-artius-browser-panel-state.js";
 import { tsEnsurePanelElement, tsGetPanelSingleton } from "./ts-artius-browser-panel.js";
 import { tsStartGlobal3DThumbnailWorker } from "./ts-artius-browser-3d-worker.js";
 import { tsClaimExecutionRescan } from "./ts-artius-browser-rescan-claim.js";
+import {
+    TS_MAX_TRACKED_EXECUTION_FILES,
+    tsExtractExecutedOutputPaths,
+} from "./ts-artius-browser-execution-outputs.js";
 
 let tsExecutionRescanTimer = 0;
 let tsExecutionRescanFirstEventAt = 0;
@@ -31,6 +35,30 @@ let tsAutoscanEnabled = true;
 // which makes the gate degrade to the plain debounce path instead of
 // hanging forever.
 let tsComfyQueueRemaining = 0;
+// What the running prompt has written so far, so the post-generation index can
+// name those files instead of asking the server to walk the whole output root.
+// tsExecutionOutputsOverflowed is the honest escape hatch: past the cap the
+// list is no longer known to be complete, so the caller falls back to the full
+// rescan it always did rather than indexing a truncated set.
+const tsPendingExecutionFiles = new Set();
+let tsExecutionOutputsOverflowed = false;
+
+function tsTrackExecutedOutputs(tsOutput) {
+    for (const tsPath of tsExtractExecutedOutputPaths(tsOutput)) {
+        if (tsPendingExecutionFiles.size >= TS_MAX_TRACKED_EXECUTION_FILES) {
+            tsExecutionOutputsOverflowed = true;
+            return;
+        }
+        tsPendingExecutionFiles.add(tsPath);
+    }
+}
+
+function tsTakePendingExecutionFiles() {
+    const tsFiles = tsExecutionOutputsOverflowed ? [] : [...tsPendingExecutionFiles];
+    tsPendingExecutionFiles.clear();
+    tsExecutionOutputsOverflowed = false;
+    return tsFiles;
+}
 
 // tsExecutionRescanTimer doubles as the "a rescan is pending" flag in
 // tsHandleStatusEvent, and clearTimeout() does not reset the caller's variable.
@@ -77,10 +105,29 @@ function tsAttemptRescanNow() {
     // One rescan per browser, not one per tab. Two ComfyUI tabs on the same
     // machine used to ask the server for two full walks of the output root
     // after every generation.
-    if (!tsClaimExecutionRescan({ tsWindowMs: tsBrowserRuntimeSettings.executionRescanClaimWindowMs })) {
+    const tsWonClaim = tsClaimExecutionRescan({ tsWindowMs: tsBrowserRuntimeSettings.executionRescanClaimWindowMs });
+    const tsFiles = tsTakePendingExecutionFiles();
+    if (!tsWonClaim) {
         return;
     }
-    tsPostJSON(`${tsApiSettings.routeBase}/rescan`, { root_id: tsBrowserRuntimeSettings.executionRescanRootId }).catch((tsError) => {
+    const tsRootId = tsBrowserRuntimeSettings.executionRescanRootId;
+    if (tsFiles.length > 0) {
+        // ComfyUI named what it wrote, so index exactly that: a handful of
+        // stat() calls instead of a walk of the whole output root. The full
+        // rescan below stays the fallback for everything else - a prompt that
+        // saved through a node we could not read, an older ComfyUI, or more
+        // files than the tracker will vouch for.
+        tsPostJSON(`${tsApiSettings.routeBase}/index_files`, { root_id: tsRootId, files: tsFiles }).catch((tsError) => {
+            tsConsoleWarn("Timesaver Artius Browser targeted index failed", tsError);
+            // The files stay unindexed until something else scans; ask for the
+            // walk we would have done anyway.
+            tsPostJSON(`${tsApiSettings.routeBase}/rescan`, { root_id: tsRootId }).catch((tsFallbackError) => {
+                tsConsoleWarn("Timesaver Artius Browser execution rescan failed", tsFallbackError);
+            });
+        });
+        return;
+    }
+    tsPostJSON(`${tsApiSettings.routeBase}/rescan`, { root_id: tsRootId }).catch((tsError) => {
         tsConsoleWarn("Timesaver Artius Browser execution rescan failed", tsError);
     });
 }
@@ -316,6 +363,7 @@ app.registerExtension({
         }
 
         api.addEventListener("status", (tsEvent) => tsHandleStatusEvent(tsEvent));
+        api.addEventListener("executed", (tsEvent) => tsTrackExecutedOutputs(tsEvent?.detail?.output));
         api.addEventListener("execution_success", () => tsHandleExecutionEnd());
         api.addEventListener("execution_error", () => tsHandleExecutionEnd());
         api.addEventListener("execution_interrupted", () => tsHandleExecutionEnd());

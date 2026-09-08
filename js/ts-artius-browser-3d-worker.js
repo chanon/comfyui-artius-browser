@@ -31,6 +31,14 @@ class TSGlobal3DThumbnailWorker {
         this.tsRunToken = 0;
         this.tsScanRunning = false;
         this.tsLastWarmupKey = "";
+        // A sweep that walked the whole library to the end has nothing left to
+        // find until the library changes. Without this, every return of window
+        // focus re-paged the entire 3D set just to discard it - dozens of
+        // sequential requests per alt-tab on a library with a few hundred
+        // models. Cleared by a completed scan (new files may have arrived);
+        // an interrupted sweep never sets it, so the hidden-tab resume still
+        // works.
+        this.tsSweepComplete = false;
         this.tsStartupTimer = 0;
         // 3D viewer captures (3d.js) each spin up a WebGL/Three.js context
         // and load the full model file. A model that can't be captured
@@ -101,6 +109,7 @@ class TSGlobal3DThumbnailWorker {
             const tsWarmupKey = `scan:${tsCompletedAt}`;
             if (tsWarmupKey !== this.tsLastWarmupKey) {
                 this.tsLastWarmupKey = tsWarmupKey;
+                this.tsSweepComplete = false;
                 // Deliberately keep tsFailedViewerAttempts: scans complete
                 // after every generation, so wholesale retries here would
                 // re-load uncapturable models on every prompt (see the
@@ -113,6 +122,10 @@ class TSGlobal3DThumbnailWorker {
 
     async tsScheduleRun(tsReason = "manual") {
         if (this.tsDisposed || this.tsScanRunning) {
+            return false;
+        }
+        if (this.tsSweepComplete) {
+            // Everything was already walked and nothing has changed since.
             return false;
         }
         // Never start a sweep in a hidden tab: requestAnimationFrame is
@@ -136,6 +149,9 @@ class TSGlobal3DThumbnailWorker {
         tsParams.set("sort", "created_at");
         tsParams.set("order", "desc");
         tsParams.set("types", "3d");
+        // Server-side skip predicate: without it the sweep paged through every
+        // 3D asset in the library and threw away the ones already captured.
+        tsParams.set("needs_3d_capture", "1");
         if (tsCursor && tsCursor.sort_value !== undefined && tsCursor.sort_value !== null && tsCursor.id) {
             tsParams.set("after_sort", String(tsCursor.sort_value));
             tsParams.set("after_id", String(tsCursor.id));
@@ -223,6 +239,10 @@ class TSGlobal3DThumbnailWorker {
                 }
                 tsCursor = tsPayload.next_cursor;
             }
+            // Only a run that walked to the end of the library may claim the
+            // sweep is settled; every early return above leaves it unset so
+            // the next focus/visibility event resumes.
+            this.tsSweepComplete = true;
             return true;
         } catch (tsError) {
             tsConsoleWarn(`Timesaver Artius Browser global 3D worker run failed (${tsReason})`, tsError);
@@ -231,6 +251,11 @@ class TSGlobal3DThumbnailWorker {
             this.tsRunning = false;
             if (this.tsPendingRun && !this.tsDisposed && !this.tsScanRunning && !document.hidden) {
                 this.tsPendingRun = false;
+                // Something asked for a sweep WHILE this one was walking, so
+                // it may have arrived behind the page this run had already
+                // passed. That request outranks the settled flag this run may
+                // have just set.
+                this.tsSweepComplete = false;
                 void this.tsRun("pending");
             }
         }

@@ -169,6 +169,14 @@ TS_EVENT_HEALTH = f"{TS_EVENT_PREFIX}:health"
 # indexer collapses the queue into a single full scan.
 TS_MAX_PENDING_SCAN_REQUESTS = 16
 
+# Upper bounds on one targeted index request (/index_files). The caller names
+# the files ComfyUI just wrote, so a legitimate batch is a handful; anything
+# past this is either a client bug or someone trying to turn the fast path back
+# into a full walk. Over the limit the request is rejected, and the caller
+# falls back to a plain rescan.
+TS_MAX_INDEX_FILES = 64
+TS_MAX_INDEX_FILE_PATH_LENGTH = 1024
+
 TS_CONFIG_NUMERIC_BOUNDS = {
     ("tools", "ffprobe_workers"): (1, 32),
     ("tools", "ffmpeg_workers"): (1, 32),

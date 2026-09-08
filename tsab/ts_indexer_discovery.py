@@ -19,6 +19,7 @@ from .ts_types import TSAssetStat, TSRootDefinition
 from .ts_utils import TSFolderPosixPath, TSRelativePosixPath
 
 __all__ = [
+    "TSBuildAssetStatForRelativePath",
     "TSFilterCompanionEntries",
     "TSIterAssetStats",
     "TSNormalizeCompanionStem",
@@ -55,6 +56,51 @@ def TSIsIgnoredDirectory(ts_name: str) -> bool:
 
 def TSIsIgnoredFileName(ts_name: str) -> bool:
     return ts_name.startswith(TS_APPLEDOUBLE_PREFIX)
+
+
+def TSBuildAssetStatForRelativePath(ts_root: TSRootDefinition, ts_relative_path: str) -> TSAssetStat | None:
+    """Stat ONE file named relative to a root, for the targeted index path.
+
+    The caller is the frontend, naming the files ComfyUI just wrote, so the
+    input is untrusted: the path is normalized, rejected outright if it tries
+    to leave the root by any spelling, and the RESOLVED result is checked
+    against the resolved root again (which is what catches a symlink pointing
+    outside). Returns None for anything that is not a readable regular file
+    inside the root - never raises, because one bad name must not cost the
+    caller the files named beside it.
+    """
+    ts_normalized = str(ts_relative_path or "").replace("\\", "/").strip()
+    if not ts_normalized:
+        return None
+    ts_segments = [ts_segment for ts_segment in ts_normalized.split("/") if ts_segment]
+    if not ts_segments or any(ts_segment in {".", ".."} for ts_segment in ts_segments):
+        return None
+    if TSIsIgnoredFileName(ts_segments[-1]) or any(TSIsIgnoredDirectory(ts_segment) for ts_segment in ts_segments[:-1]):
+        return None
+    try:
+        ts_resolved_root = Path(ts_root.ts_path).resolve()
+        ts_path = (ts_resolved_root / "/".join(ts_segments)).resolve()
+        ts_path.relative_to(ts_resolved_root)
+        if not ts_path.is_file():
+            return None
+        ts_stat = ts_path.stat()
+        ts_file_relative_path = TSRelativePosixPath(ts_path, ts_resolved_root)
+    except (OSError, ValueError) as ts_error:
+        TSLogVerbose("indexer.relative_file.rejected", relative_path=ts_normalized, error=str(ts_error))
+        return None
+    if ts_path.suffix.lower() not in TS_SUPPORTED_EXTENSIONS:
+        return None
+    return TSAssetStat(
+        ts_path=ts_path,
+        ts_root=ts_root,
+        ts_relative_path=ts_file_relative_path,
+        ts_folder_path=TSFolderPosixPath(ts_file_relative_path),
+        ts_filename=ts_path.name,
+        ts_extension=ts_path.suffix.lower(),
+        ts_size_bytes=int(ts_stat.st_size),
+        ts_mtime_ns=int(getattr(ts_stat, "st_mtime_ns", int(ts_stat.st_mtime * 1000000000))),
+        ts_ctime_ns=int(getattr(ts_stat, "st_ctime_ns", int(ts_stat.st_ctime * 1000000000))),
+    )
 
 
 def TSFilterCompanionEntries(ts_file_entries: Iterable[os.DirEntry[str]]) -> list[os.DirEntry[str]]:

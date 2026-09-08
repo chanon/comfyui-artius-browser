@@ -7,7 +7,7 @@ import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from typing import Any, Iterable
 
-from .ts_indexer_discovery import TSIterAssetStats
+from .ts_indexer_discovery import TSBuildAssetStatForRelativePath, TSIterAssetStats
 from .ts_indexer_payload import TSCarryExistingRowValues
 from .ts_indexer_processing import TSProcessCandidateTuple
 from .ts_indexer_progress import TSBuildConsoleProgressBar, TSBuildProgressMessage, TSComputeProgressPercent
@@ -145,6 +145,100 @@ class TSIndexer:
                 self.ts_scan_task = asyncio.create_task(self._TSRunScanAsync(ts_pending.get("scope"), ts_pending.get("root_id")))
             else:
                 self.ts_scan_task = None
+
+    def TSIndexRelativeFilesSync(self, ts_root_id: str, ts_relative_paths: Iterable[str]) -> dict[str, Any]:
+        """Index a named handful of files instead of walking a whole root.
+
+        The post-generation autoscan used to walk the entire output root to
+        pick up the one or two files ComfyUI had just written. Measured on a
+        real library that is 6.7 seconds and 6128 stat() calls per generation,
+        on the ComfyUI process, competing with it for CPU. ComfyUI's own
+        "executed" event already names what each node wrote, so the frontend
+        passes those names here and only they are read.
+
+        Deliberately NOT a scan: no status, no progress events, no stale-row
+        prune (nothing was walked, so nothing can be concluded about what is
+        gone). A full rescan still owns deletions, and the caller falls back to
+        one whenever it could not name the files.
+        """
+        ts_requested = [str(ts_path) for ts_path in ts_relative_paths]
+        ts_result: dict[str, Any] = {"indexed": 0, "skipped": len(ts_requested), "busy": False, "rows": []}
+        if not ts_requested:
+            return ts_result
+        if self.ts_status.ts_running:
+            # A scan is already walking this root and will pick the files up.
+            ts_result["busy"] = True
+            return ts_result
+        ts_config = self.ts_config_store.TSLoadConfig()
+        ts_root = next(
+            (ts_candidate for ts_candidate in self.ts_storage_paths.TSBuildBaseRoots(ts_config)
+             if ts_candidate.ts_root_id == ts_root_id),
+            None,
+        )
+        if ts_root is None:
+            TSLogVerbose("indexer.index_files.unknown_root", root_id=ts_root_id)
+            return ts_result
+
+        ts_payloads: list[TSAssetPayload] = []
+        ts_seen_paths: set[str] = set()
+        for ts_relative_path in ts_requested:
+            ts_asset_stat = TSBuildAssetStatForRelativePath(ts_root, ts_relative_path)
+            if ts_asset_stat is None:
+                continue
+            ts_normalized_path = TSNormalizePathString(ts_asset_stat.ts_path)
+            if ts_normalized_path in ts_seen_paths:
+                continue
+            ts_seen_paths.add(ts_normalized_path)
+            ts_existing_row = self.ts_database.TSGetAssetByPath(ts_normalized_path)
+            if not self._TSRelativeFileNeedsIndex(ts_asset_stat, ts_existing_row):
+                continue
+            ts_payload, _ts_row = self._TSProcessCandidateTuple((ts_asset_stat, ts_existing_row))
+            if ts_payload is None:
+                continue
+            if ts_existing_row is not None and str(ts_existing_row["hash"] or "") != ts_payload.ts_hash:
+                # Same rule as the scan: the old preview belongs to the old
+                # bytes, and nothing else references it.
+                ts_existing_preview_path = str(ts_existing_row["preview_path"] or "")
+                if ts_existing_preview_path and self.ts_database.TSCountPreviewReferences(ts_existing_preview_path, int(ts_existing_row["id"])) == 0:
+                    self.ts_preview_cache.TSPurgePreview(ts_existing_preview_path)
+            ts_payloads.append(ts_payload)
+
+        if ts_payloads:
+            ts_result["rows"] = list(self.ts_database.TSUpsertAssets(ts_payloads))
+            ts_result["indexed"] = len(ts_payloads)
+        ts_result["skipped"] = len(ts_requested) - ts_result["indexed"]
+        TSLogVerbose(
+            "indexer.index_files.done",
+            root_id=ts_root_id,
+            requested=len(ts_requested),
+            indexed=ts_result["indexed"],
+        )
+        return ts_result
+
+    def _TSRelativeFileNeedsIndex(self, ts_asset_stat: TSAssetStat, ts_existing_row) -> bool:
+        # The same cheap compare the scan uses, so a duplicate request for an
+        # already-processed file costs a stat instead of a re-hash.
+        if ts_existing_row is None:
+            return True
+        ts_handler = self.ts_handler_registry.TSResolveHandler(ts_asset_stat.ts_extension, None)
+        if ts_handler is None:
+            return False
+        if (
+            int(ts_existing_row["mtime_ns"] or 0) != ts_asset_stat.ts_mtime_ns
+            or int(ts_existing_row["size_bytes"] or 0) != ts_asset_stat.ts_size_bytes
+            or str(ts_existing_row["type"] or "") != ts_handler.ts_kind
+        ):
+            return True
+        if not (
+            bool(ts_existing_row["is_indexed"])
+            and bool(ts_existing_row["has_preview"])
+            and bool(ts_existing_row["has_metadata"])
+        ):
+            return True
+        return TSNeedsPromptMetadataRefresh(
+            str(ts_existing_row["type"] or ""),
+            TSJsonLoads(ts_existing_row["metadata"], {}),
+        )
 
     def TSRunScanSync(self, ts_scope: str | None = None, ts_root_id: str | None = None) -> None:
         with self.ts_thread_lock:

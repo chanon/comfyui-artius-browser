@@ -63,6 +63,10 @@ class TSScanService:
         TSLogVerbose("runtime.scan.requested", scope=ts_scope, root_id=ts_root_id)
         return await self.ts_indexer.TSStartBackgroundScan(ts_scope=ts_scope, ts_root_id=ts_root_id)
 
+    def TSIndexFiles(self, ts_root_id: str, ts_relative_paths: list[str]) -> dict[str, Any]:
+        TSLogVerbose("runtime.index_files.requested", root_id=ts_root_id, count=len(ts_relative_paths))
+        return self.ts_indexer.TSIndexRelativeFilesSync(ts_root_id, ts_relative_paths)
+
     def _TSResetForRebuild(self) -> None:
         self.ts_database.TSResetIndex()
         self.ts_preview_cache.TSClearGeneratedCache()

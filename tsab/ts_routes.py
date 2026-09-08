@@ -4,7 +4,12 @@ import asyncio
 
 from aiohttp import web as TSWeb
 from .ts_route_errors import TSWrapRouteHandler
-from .ts_settings import TS_DEFAULT_PAGE_SIZE, TS_MAX_3D_CAPTURE_DATA_URL_LENGTH
+from .ts_settings import (
+    TS_DEFAULT_PAGE_SIZE,
+    TS_MAX_3D_CAPTURE_DATA_URL_LENGTH,
+    TS_MAX_INDEX_FILE_PATH_LENGTH,
+    TS_MAX_INDEX_FILES,
+)
 from .ts_logging import TSLogVerbose
 from .ts_utils import TSIsSqliteInt, TSParseAssetCursor, TSParseDateToEpoch, TSParseMaybeInt, TSParseQueryList
 
@@ -23,6 +28,7 @@ TS_ROUTE_DEFINITIONS = (
     ("POST", "/asset_browser/preview/{id}/warm", "TSHandlePreviewWarm"),
     ("GET", "/asset_browser/file", "TSHandleFile"),
     ("POST", "/asset_browser/rescan", "TSHandleRescan"),
+    ("POST", "/asset_browser/index_files", "TSHandleIndexFiles"),
     ("POST", "/asset_browser/rebuild_cache", "TSHandleRebuildCache"),
     ("POST", "/asset_browser/delete", "TSHandleDelete"),
     ("POST", "/asset_browser/favorite/{id}", "TSHandleFavorite"),
@@ -182,6 +188,7 @@ async def TSHandleAssets(ts_runtime, ts_request):
         "sort_direction": ts_request.query.get("order") or "desc",
         "search_scope": ts_request.query.get("search_scope") or "filename",
         "favorites_only": str(ts_request.query.get("favorites") or "").lower() in {"1", "true", "yes"},
+        "needs_3d_capture": str(ts_request.query.get("needs_3d_capture") or "").lower() in {"1", "true", "yes"},
     }
     ts_limit = min(500, max(1, TSParseMaybeInt(ts_request.query.get("limit")) or TS_DEFAULT_PAGE_SIZE))
     ts_view = ts_request.query.get("view") or "flat"
@@ -264,6 +271,34 @@ async def TSHandleRescan(ts_runtime, ts_request):
     TSLogVerbose("route.rescan.request", scope=ts_scope, root_id=ts_root_id, path=ts_request.path)
     ts_started = await ts_runtime.TSRequestScan(ts_scope=ts_scope, ts_root_id=ts_root_id)
     return TSWeb.json_response({"started": ts_started, "status": ts_runtime.TSGetScanStatus()})
+
+
+def TSParseIndexFileList(ts_value):
+    # Relative paths only, and the shape is checked before anything touches the
+    # filesystem: the resolver rejects traversal too, but a request that cannot
+    # be legitimate should never reach it.
+    if not isinstance(ts_value, list):
+        raise TSWeb.HTTPBadRequest(reason="Expected files list")
+    if len(ts_value) > TS_MAX_INDEX_FILES:
+        raise TSWeb.HTTPBadRequest(reason="Too many files")
+    ts_paths = []
+    for ts_entry in ts_value:
+        if not isinstance(ts_entry, str):
+            raise TSWeb.HTTPBadRequest(reason="Expected file path string")
+        ts_path = ts_entry.strip()
+        if not ts_path or len(ts_path) > TS_MAX_INDEX_FILE_PATH_LENGTH:
+            raise TSWeb.HTTPBadRequest(reason="Invalid file path")
+        ts_paths.append(ts_path)
+    return ts_paths
+
+
+async def TSHandleIndexFiles(ts_runtime, ts_request):
+    ts_payload = await TSReadJsonObject(ts_request, ts_required=True)
+    ts_root_id = TSParseRescanRootId(ts_payload.get("root_id")) or "output"
+    ts_files = TSParseIndexFileList(ts_payload.get("files", []))
+    TSLogVerbose("route.index_files.request", root_id=ts_root_id, count=len(ts_files), path=ts_request.path)
+    ts_result = await asyncio.to_thread(ts_runtime.TSIndexFiles, ts_root_id, ts_files)
+    return TSWeb.json_response(ts_result)
 
 
 async def TSHandleRebuildCache(ts_runtime, ts_request):

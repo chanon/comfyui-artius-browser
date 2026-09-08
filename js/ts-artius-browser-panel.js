@@ -1100,6 +1100,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsGalleryContent.addEventListener("click", (tsEvent) => this.tsHandleGalleryClick(tsEvent));
         this.tsRefs.tsGalleryContent.addEventListener("dblclick", (tsEvent) => this.tsHandleGalleryDoubleClick(tsEvent));
         this.tsRefs.tsGalleryContent.addEventListener("contextmenu", (tsEvent) => this.tsHandleGalleryContextMenu(tsEvent));
+        // Delegated, like every other gallery handler: cards are recycled by
+        // the virtualized grid, so per-card listeners would be rebound on
+        // every scroll tick.
+        this.tsRefs.tsGalleryContent.addEventListener("pointerover", (tsEvent) => this.tsHandleGalleryPointerOver(tsEvent));
+        this.tsRefs.tsGalleryContent.addEventListener("pointerout", (tsEvent) => this.tsHandleGalleryPointerOut(tsEvent));
         this.tsRefs.tsContextMenu.addEventListener("click", (tsEvent) => this.tsHandleContextMenuClick(tsEvent));
         this.tsRefs.tsShortcutsClose.addEventListener("click", () => this.tsToggleShortcutHelp(false));
         this.tsRefs.tsShortcuts.addEventListener("click", (tsEvent) => {
@@ -2331,7 +2336,12 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             return `<div class="ts-card-placeholder">${this.tsEscapeHTML(tsPlaceholderLabel)}</div>`;
         }
         if (this.tsIsWorkflowSection() && tsItem?.preview_kind === "video" && tsPreviewURL) {
-            return `<video class="ts-workflow-preview" src="${this.tsEscapeAttribute(tsPreviewURL)}" muted loop autoplay playsinline preload="metadata"></video>`;
+            // Plays on hover, not on sight. Autoplaying every visible card
+            // meant N videos decoding continuously for as long as the sidebar
+            // was open - the only thing in this panel that burns CPU/GPU while
+            // nobody is doing anything. preload="metadata" still paints the
+            // first frame, so a resting card looks the way it always did.
+            return `<video class="ts-workflow-preview" src="${this.tsEscapeAttribute(tsPreviewURL)}" muted loop playsinline preload="metadata"></video>`;
         }
         const tsImageClass = this.tsIsWorkflowSection() ? ` class="ts-workflow-preview"` : "";
         // A placeholder preview means generation failed (corrupt file, missing
@@ -3194,6 +3204,44 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             return;
         }
         this.tsOpenViewer(tsAssetId);
+    }
+
+    tsResolveHoveredPreviewVideo(tsEvent) {
+        // Ignore movement WITHIN one card: pointerover/out fire for every
+        // child element, and restarting the clip on each of them would make a
+        // hovered preview stutter instead of play.
+        const tsCard = tsEvent?.target?.closest?.("[data-card-id]");
+        if (!tsCard || (tsEvent.relatedTarget && tsCard.contains(tsEvent.relatedTarget))) {
+            return null;
+        }
+        return tsCard.querySelector("video.ts-workflow-preview");
+    }
+
+    tsHandleGalleryPointerOver(tsEvent) {
+        const tsVideo = this.tsResolveHoveredPreviewVideo(tsEvent);
+        if (!tsVideo) {
+            return;
+        }
+        // Muted playback is allowed without a gesture, but a play() that loses
+        // a race with the next pointerout rejects; that is not an error worth
+        // surfacing.
+        const tsPlayed = tsVideo.play();
+        if (tsPlayed && typeof tsPlayed.catch === "function") {
+            tsPlayed.catch(() => {});
+        }
+    }
+
+    tsHandleGalleryPointerOut(tsEvent) {
+        const tsVideo = this.tsResolveHoveredPreviewVideo(tsEvent);
+        if (!tsVideo) {
+            return;
+        }
+        tsVideo.pause();
+        try {
+            tsVideo.currentTime = 0;
+        } catch {
+            // Not seekable yet (metadata still loading) - it starts at 0 anyway.
+        }
     }
 
     tsHandleDragStart(tsEvent) {

@@ -106,6 +106,24 @@ def TSBuildAssetQueryParts(
         ts_parameters.append(int(ts_filters["max_width"]))
     if ts_filters.get("favorites_only"):
         ts_where_clauses.append("assets_view.is_favorite = 1")
+    if ts_filters.get("needs_3d_capture"):
+        # 3D models whose stored preview is not a real viewer capture. The
+        # background sweep used to page through EVERY 3D asset on each window
+        # focus just to discard the ones already captured; this narrows that to
+        # the work that is left.
+        #
+        # A capture is written as "<key>.3d.<ext>" (TSBuildPreviewPath) and the
+        # key is a hex hash, so it can carry no dots of its own and the
+        # substring test is exact. What this cannot see is a capture whose FILE
+        # has since vanished from the cache: that row reads as captured here
+        # and is not returned. The panel's visible-card queue stats the preview
+        # file and re-captures it when the user scrolls to it, and Rebuild
+        # Cache clears it wholesale.
+        ts_where_clauses.append(
+            "(assets_view.preview_path IS NULL OR assets_view.preview_path = ''"
+            " OR instr(lower(assets_view.preview_path), '/placeholders/') > 0"
+            " OR lower(assets_view.preview_path) NOT LIKE '%.3d.%')"
+        )
     if ts_filters.get("min_height") is not None:
         ts_where_clauses.append("assets_view.height >= ?")
         ts_parameters.append(int(ts_filters["min_height"]))

@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-09-08
+
+An audit of what this pack costs the ComfyUI browser found nothing that slows
+the canvas: with a 310-node graph the canvas draws in the same 10 ms whether
+the sidebar is open, closed, or scrolling, and twelve idle seconds produce no
+long tasks at all. It did find three pieces of work being done for no return,
+and those are gone.
+
+### Changed
+
+- **After a generation the browser indexes the files that were just written,
+  not the whole output folder.** ComfyUI's own event stream names what each
+  node saved, so a handful of `stat()` calls replaces a full walk of the
+  output root — measured at 6.7 seconds and 6128 files per generation on a
+  real library, on the ComfyUI process, competing with it for CPU. The full
+  rescan stays the fallback for anything that cannot be named that way, and
+  still owns deletions: startup, the Rescan button, and any generation whose
+  outputs the browser could not read.
+- **The background 3D-thumbnail sweep stops re-walking a library it has
+  already finished.** It asked the server for every 3D asset again on each
+  return of window focus, only to discard the ones already captured — dozens
+  of requests per alt-tab on a library with a few hundred models. The skip is
+  now a server-side filter, and a sweep that reached the end is not repeated
+  until a scan brings something new.
+- **Workflow video previews play on hover instead of on sight.** Every visible
+  card with a video sidecar used to decode continuously for as long as the
+  sidebar was open. A resting card still shows its first frame.
+
 ## [1.18.0] - 2026-09-07
 
 Dragging a video onto the canvas made the browser copy the whole file into
