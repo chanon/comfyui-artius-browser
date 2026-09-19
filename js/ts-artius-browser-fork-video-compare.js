@@ -1,11 +1,12 @@
 // obvpm fork: the video comparison uses the whole stage, gets a second layout
 // for two clips -- "Split": both clips stacked, a draggable vertical divider
 // shows the first on its left and the second on its right, like upstream's
-// two-image comparison -- and one compact controls row.
+// two-image comparison -- one compact controls row, and a Loop option.
 // Upstream's compare setup only drives the <video> elements and the transport
 // (sync, buffering, frame steps) and never looks at the layout, so all of this
 // is CSS on a data attribute plus a divider; its sync engine is untouched.
 const TS_FORK_COMPARE_KEY = "tsab.fork.videoCompare";
+const TS_FORK_COMPARE_LOOP_KEY = "tsab.fork.videoCompareLoop";
 const TS_FORK_COMPARE_LAYOUTS = [
     ["side", "fork.video.compare.side", "Side by Side", "fork.video.compare.side.hint", "The clips next to each other"],
     ["split", "fork.video.compare.split", "Split", "fork.video.compare.split.hint",
@@ -17,6 +18,22 @@ function tsReadLayout() {
         return window.localStorage.getItem(TS_FORK_COMPARE_KEY) === "split" ? "split" : "side";
     } catch {
         return "side";
+    }
+}
+
+function tsReadLoop() {
+    try {
+        return window.localStorage.getItem(TS_FORK_COMPARE_LOOP_KEY) === "1";
+    } catch {
+        return false;
+    }
+}
+
+function tsWriteLoop(tsOn) {
+    try {
+        window.localStorage.setItem(TS_FORK_COMPARE_LOOP_KEY, tsOn ? "1" : "0");
+    } catch {
+        // private mode: the choice still holds for this page
     }
 }
 
@@ -167,6 +184,14 @@ const TS_FORK_COMPARE_CSS = `
         white-space: nowrap;
         pointer-events: none;
     }
+    .ts-fork-compare-loop {
+        flex: none;
+        white-space: nowrap;
+    }
+    .ts-fork-compare-loop[data-active="true"] {
+        border-color: var(--ts-accent);
+        background: color-mix(in srgb, var(--ts-accent) 18%, var(--ts-bg-2));
+    }
     .ts-fork-compare-layout {
         flex: none;
         display: inline-flex;
@@ -210,6 +235,7 @@ export function tsInstallForkVideoCompare(tsPanel) {
     tsViewer.shadowRoot.append(tsStyle);
 
     let tsLayout = tsReadLayout();
+    let tsLoop = tsReadLoop();
 
     const tsBindStageInteractions = tsViewer.tsBindStageInteractions;
     tsViewer.tsBindStageInteractions = function (...tsArgs) {
@@ -231,6 +257,46 @@ export function tsInstallForkVideoCompare(tsPanel) {
                 tsButton.setAttribute("aria-pressed", String(tsActive));
             }
         };
+        // Loop. Upstream stops the group in ONE place -- the primary clip's
+        // `ended` pauses everything -- and already treats Play on a finished
+        // group as "rewind all and replay". So looping is pressing its own
+        // Play button once that has happened: the rewind, the re-sync and the
+        // buffering hold all stay upstream's. Deferred, so it does not matter
+        // whether this listener or upstream's runs first.
+        const tsPlayToggle = tsControls.querySelector(".ts-video-play-toggle");
+        const tsVideos = Array.from(tsGrid.querySelectorAll("video"));
+        const tsPrimary = tsVideos.find((tsVideo) => tsVideo.dataset.primary === "true") || tsVideos[0];
+        if (tsPlayToggle && tsPrimary) {
+            const tsLoopButton = document.createElement("button");
+            tsLoopButton.type = "button";
+            tsLoopButton.className = "ts-video-step ts-fork-compare-loop";
+            tsLoopButton.textContent = this.tsT("fork.video.compare.loop", "Loop");
+            const tsPaintLoop = () => {
+                tsLoopButton.dataset.active = String(tsLoop);
+                tsLoopButton.setAttribute("aria-pressed", String(tsLoop));
+                tsLoopButton.title = tsLoop
+                    ? this.tsT("fork.video.compare.loop.on", "Looping: playback starts over when the clips end")
+                    : this.tsT("fork.video.compare.loop.off", "Play once and stop at the end");
+            };
+            tsLoopButton.addEventListener("click", () => {
+                tsLoop = !tsLoop;
+                tsWriteLoop(tsLoop);
+                tsPaintLoop();
+            });
+            tsPrimary.addEventListener("ended", () => {
+                if (!tsLoop) {
+                    return;
+                }
+                window.setTimeout(() => {
+                    // still this stage, still at the end, still wanted
+                    if (tsLoop && tsPlayToggle.isConnected && tsPrimary.ended) {
+                        tsPlayToggle.click();
+                    }
+                }, 0);
+            });
+            tsPaintLoop();
+            tsControls.append(tsLoopButton);
+        }
         if (tsCanSplit) {
             const tsDivider = document.createElement("div");
             tsDivider.className = "ts-fork-compare-divider";
