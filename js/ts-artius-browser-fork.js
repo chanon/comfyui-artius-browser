@@ -7,10 +7,11 @@ import { tsInstallForkAssetsOnly } from "./ts-artius-browser-fork-assets-only.js
 import { tsInstallForkToolbar } from "./ts-artius-browser-fork-toolbar.js";
 import { tsInstallForkRecurse } from "./ts-artius-browser-fork-recurse.js";
 import { tsInstallForkViewerInfo } from "./ts-artius-browser-fork-viewer-info.js";
+import { tsInstallForkVideoSize } from "./ts-artius-browser-fork-video-size.js";
 
 export function tsInstallFork(tsPanel) {
     for (const tsInstall of [tsInstallForkToolbar, tsInstallForkRecurse, tsInstallForkSettings, tsInstallForkSelectionBar,
-        tsInstallForkAssetsOnly, tsInstallForkViewerInfo]) {
+        tsInstallForkAssetsOnly, tsInstallForkViewerInfo, tsInstallForkVideoSize]) {
         try {
             tsInstall(tsPanel);
         } catch (tsError) {
