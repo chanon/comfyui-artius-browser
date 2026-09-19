@@ -1371,4 +1371,36 @@ export const tsPanelStyles = `<style>
                 .ts-fork-selbar .ts-fork-selbar-clear:hover {
                     color: var(--ts-text);
                 }
+
+                /* ---- obvpm fork: filename pill on the thumbnails ----
+                   An overlay styled like upstream's badges but larger, in the
+                   bottom corner; upstream's badge row moves up to sit above it
+                   (and so can still wrap upwards freely). */
+                .ts-card-media {
+                    --ts-fork-name-font-size: calc(var(--ts-card-badge-font-size, 10px) + 2px);
+                    /* a little closer to the card's edge than upstream's inset */
+                    --ts-fork-name-bottom: calc(var(--ts-card-inset, 8px) * 0.75);
+                }
+
+                .ts-fork-card-name {
+                    position: absolute;
+                    left: var(--ts-card-inset, 8px);
+                    bottom: var(--ts-fork-name-bottom);
+                    max-width: calc(100% - 2 * var(--ts-card-inset, 8px));
+                    box-sizing: border-box;
+                    padding: var(--ts-card-badge-pad-y, 3px) var(--ts-card-badge-pad-x, 6px);
+                    border-radius: var(--ts-card-badge-radius, 5px);
+                    background: var(--ts-surface-overlay-strong);
+                    font-size: var(--ts-fork-name-font-size);
+                    line-height: 1.2;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    z-index: 2;
+                }
+
+                .ts-card-media:has(.ts-fork-card-name) .ts-card-badges {
+                    bottom: calc(var(--ts-fork-name-bottom) + var(--ts-fork-name-font-size) * 1.2
+                        + 2 * var(--ts-card-badge-pad-y, 3px) + var(--ts-card-action-gap, 4px) * 0.5);
+                }
             </style>`;
