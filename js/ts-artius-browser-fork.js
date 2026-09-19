@@ -10,11 +10,12 @@ import { tsInstallForkViewerInfo } from "./ts-artius-browser-fork-viewer-info.js
 import { tsInstallForkVideoSize } from "./ts-artius-browser-fork-video-size.js";
 import { tsInstallForkVideoCompare } from "./ts-artius-browser-fork-video-compare.js";
 import { tsInstallForkCardNames } from "./ts-artius-browser-fork-card-names.js";
+import { tsInstallForkCardAlign } from "./ts-artius-browser-fork-card-align.js";
 
 export function tsInstallFork(tsPanel) {
     for (const tsInstall of [tsInstallForkToolbar, tsInstallForkRecurse, tsInstallForkSettings, tsInstallForkSelectionBar,
         tsInstallForkAssetsOnly, tsInstallForkViewerInfo, tsInstallForkVideoSize, tsInstallForkVideoCompare,
-        tsInstallForkCardNames]) {
+        tsInstallForkCardNames, tsInstallForkCardAlign]) {
         try {
             tsInstall(tsPanel);
         } catch (tsError) {
