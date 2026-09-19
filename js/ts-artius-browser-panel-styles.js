@@ -1237,4 +1237,59 @@ export const tsPanelStyles = `<style>
                     min-height: 24px;
                     padding: 1px 9px;
                 }
+
+                /* ---- obvpm fork: settings popup ---------------------------
+                   The overlay mirrors .ts-shortcuts (whose panel, head and
+                   close classes it reuses); only its own parts are here. */
+                .ts-toolbar .ts-title > .ts-fork-settings-button {
+                    min-height: 20px;
+                    padding: 0 6px;
+                    font-size: 14px;
+                    font-weight: 400;
+                    line-height: 1;
+                }
+
+                .ts-fork-settings {
+                    position: absolute;
+                    inset: 0;
+                    z-index: 60;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 20px;
+                    background: color-mix(in srgb, var(--ts-bg-0) 55%, transparent);
+                    backdrop-filter: blur(3px);
+                }
+
+                .ts-fork-settings[data-open="false"] {
+                    display: none;
+                }
+
+                .ts-fork-settings-body {
+                    display: grid;
+                    gap: 14px;
+                    padding: 14px 16px 16px;
+                }
+
+                .ts-fork-settings-row {
+                    display: grid;
+                    gap: 6px;
+                    justify-items: start;
+                }
+
+                .ts-fork-settings-row[hidden],
+                .ts-fork-settings-note[hidden] {
+                    display: none;
+                }
+
+                .ts-fork-settings-hint,
+                .ts-fork-settings-note {
+                    color: var(--ts-muted);
+                    font-size: 12px;
+                    line-height: 1.4;
+                }
+
+                .ts-fork-settings-note {
+                    padding: 14px 16px 16px;
+                }
             </style>`;

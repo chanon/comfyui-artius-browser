@@ -69,6 +69,7 @@ import { TS_COMPARE_MAX_ITEMS, TS_COMPARE_MIN_ITEMS } from "./ts-artius-browser-
 import { TS3DThumbnailQueue } from "./ts-artius-browser-panel-3d-queue.js";
 import { tsPanelSettings, tsProjectSettings } from "./ts-artius-browser-settings.js";
 import { tsPanelStyles } from "./ts-artius-browser-panel-styles.js";
+import { tsInstallFork } from "./ts-artius-browser-fork.js";
 
 const tsTypeOrder = tsPanelSettings.typeOrder;
 const tsDefaultLimit = tsPanelSettings.defaultLimit;
@@ -234,6 +235,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsViewer = tsGetViewerSingleton();
         this.tsBuildShell();
         this.tsBindEvents();
+        tsInstallFork(this);    // obvpm fork: everything it adds to the panel
         this.tsInitAsync();
     }
 
