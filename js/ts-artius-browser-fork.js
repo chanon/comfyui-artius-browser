@@ -3,9 +3,10 @@
 // import and one call however much the fork grows.
 import { tsInstallForkSettings } from "./ts-artius-browser-fork-settings.js";
 import { tsInstallForkSelectionBar } from "./ts-artius-browser-fork-selection-bar.js";
+import { tsInstallForkAssetsOnly } from "./ts-artius-browser-fork-assets-only.js";
 
 export function tsInstallFork(tsPanel) {
-    for (const tsInstall of [tsInstallForkSettings, tsInstallForkSelectionBar]) {
+    for (const tsInstall of [tsInstallForkSettings, tsInstallForkSelectionBar, tsInstallForkAssetsOnly]) {
         try {
             tsInstall(tsPanel);
         } catch (tsError) {

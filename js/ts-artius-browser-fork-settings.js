@@ -78,7 +78,10 @@ export function tsInstallForkSettings(tsPanel) {
         tsHint.className = "ts-fork-settings-hint";
         tsRow.append(tsControl, tsHint);      // append MOVES it out of the toolbar
         tsBody.append(tsRow);
-        tsRows.push({ tsRow, tsControl, tsHint, tsHintKey, tsHintFallback });
+        tsRows.push({
+            tsRow, tsControl, tsHint, tsFollowsControl: true,
+            tsHintText: (tsTranslate) => tsTranslate(tsHintKey, tsHintFallback),
+        });
     }
     tsAnchor.parentNode.insertBefore(tsOverlay, tsAnchor.nextSibling);
 
@@ -88,27 +91,43 @@ export function tsInstallForkSettings(tsPanel) {
         tsButton.setAttribute("aria-label", tsLabel);
         tsTitle.textContent = tsLabel;
         tsClose.setAttribute("aria-label", tsT("button.close", "Close"));
-        tsNote.textContent = tsT("fork.settingsAssetsOnly",
-            "These options belong to the Assets section.");
+        tsNote.textContent = tsT("fork.settingsAssetsSection",
+            "Autoscan and Rebuild Cache belong to the Assets section.");
         for (const tsEntry of tsRows) {
-            tsEntry.tsHint.textContent = tsT(tsEntry.tsHintKey, tsEntry.tsHintFallback);
+            tsEntry.tsHint.textContent = tsEntry.tsHintText(tsT) || "";
         }
+    };
+
+    // Other fork features put their own option in the popup through this.
+    // `tsHintText(tsT)` runs on every hydrate: it returns the hint and may
+    // set the control's own label on the way, so both follow the locale.
+    tsRefs.tsForkSettingsAddRow = (tsControl, tsHintText) => {
+        const tsRow = document.createElement("div");
+        tsRow.className = "ts-fork-settings-row";
+        const tsHint = document.createElement("div");
+        tsHint.className = "ts-fork-settings-hint";
+        tsRow.append(tsControl, tsHint);
+        tsBody.append(tsRow);
+        tsRows.push({ tsRow, tsControl, tsHint, tsFollowsControl: false, tsHintText });
+        tsHydrate();
+        return tsRow;
     };
 
     const tsSetOpen = (tsOpen) => {
         if (tsOpen) {
             tsPanel.tsCloseContextMenu?.();
             tsHydrate();        // the locale can change while the panel lives
-            // The panel hides these controls in the Workflows section. A row
-            // follows its control, and the popup says why it is empty.
-            let tsShown = 0;
+            // The panel hides the controls it owns in the Workflows section.
+            // Such a row follows its control, and the popup says why rows are
+            // missing. The fork's own options are always there.
+            let tsMissing = 0;
             for (const tsEntry of tsRows) {
-                const tsGone = tsEntry.tsControl.hidden
-                    || tsEntry.tsControl.style.display === "none";
+                const tsGone = tsEntry.tsFollowsControl && (tsEntry.tsControl.hidden
+                    || tsEntry.tsControl.style.display === "none");
                 tsEntry.tsRow.hidden = tsGone;
-                tsShown += tsGone ? 0 : 1;
+                tsMissing += tsGone ? 1 : 0;
             }
-            tsNote.hidden = tsShown > 0;
+            tsNote.hidden = tsMissing === 0;
         }
         tsOverlay.dataset.open = String(tsOpen);
         tsOverlay.hidden = !tsOpen;

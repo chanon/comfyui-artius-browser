@@ -1289,6 +1289,11 @@ export const tsPanelStyles = `<style>
                     justify-items: start;
                 }
 
+                /* the note sits UNDER the rows now that some are always there */
+                .ts-fork-settings-body + .ts-fork-settings-note {
+                    padding-top: 0;
+                }
+
                 .ts-fork-settings-row[hidden],
                 .ts-fork-settings-note[hidden] {
                     display: none;
