@@ -1292,4 +1292,66 @@ export const tsPanelStyles = `<style>
                 .ts-fork-settings-note {
                     padding: 14px 16px 16px;
                 }
+
+                /* ---- obvpm fork: selection bar ----------------------------
+                   A full-width row docked at the bottom of the panel (the
+                   shell grid's third row), only while Compare or Delete can be
+                   used. Each button is shown by the bar's own data attribute;
+                   the panel's inline display on them is "" in the Assets
+                   section, so these rules decide. */
+                .ts-fork-selbar {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    min-width: 0;
+                    padding: 5px 8px 5px 12px;
+                    border-top: 1px solid var(--ts-border);
+                    background: var(--ts-bg-1);
+                    font-size: 12px;
+                    white-space: nowrap;
+                }
+
+                .ts-fork-selbar[hidden] {
+                    display: none;
+                }
+
+                .ts-fork-selbar-count {
+                    color: var(--ts-muted);
+                    margin-right: 4px;
+                }
+
+                .ts-fork-selbar button {
+                    min-height: 24px;
+                    padding: 1px 10px;
+                    border-radius: 6px;
+                    font-size: 12px;
+                }
+
+                .ts-fork-selbar[data-compare="false"] .ts-compare-selected,
+                .ts-fork-selbar[data-delete="false"] .ts-delete-selected {
+                    display: none;
+                }
+
+                .ts-fork-selbar .ts-delete-selected {
+                    margin-left: auto;      /* far right of the bar */
+                    border-color: color-mix(in srgb, var(--ts-danger) 52%, var(--ts-border));
+                    color: var(--ts-danger);
+                }
+
+                .ts-fork-selbar .ts-delete-selected:hover {
+                    border-color: var(--ts-danger);
+                }
+
+                .ts-fork-selbar .ts-fork-selbar-clear {
+                    padding: 0 6px;
+                    border-color: transparent;
+                    background: transparent;
+                    color: var(--ts-muted);
+                    font-size: 16px;
+                    line-height: 1;
+                }
+
+                .ts-fork-selbar .ts-fork-selbar-clear:hover {
+                    color: var(--ts-text);
+                }
             </style>`;

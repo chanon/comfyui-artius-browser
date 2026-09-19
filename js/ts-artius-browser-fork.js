@@ -2,9 +2,10 @@
 // to the panel is installed from here, so upstream's panel file carries one
 // import and one call however much the fork grows.
 import { tsInstallForkSettings } from "./ts-artius-browser-fork-settings.js";
+import { tsInstallForkSelectionBar } from "./ts-artius-browser-fork-selection-bar.js";
 
 export function tsInstallFork(tsPanel) {
-    for (const tsInstall of [tsInstallForkSettings]) {
+    for (const tsInstall of [tsInstallForkSettings, tsInstallForkSelectionBar]) {
         try {
             tsInstall(tsPanel);
         } catch (tsError) {
