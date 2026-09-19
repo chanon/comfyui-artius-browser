@@ -1322,7 +1322,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRemoveItemsByIds([tsAssetId]);
     }
     tsHydrateText() {
-        this.tsRefs.tsTitleLink.textContent = this.tsT("panel.title", tsProjectSettings.title);
+        this.tsRefs.tsTitleLink.textContent = [this.tsT("panel.title", tsProjectSettings.title), tsProjectSettings.forkLabel]
+            .filter(Boolean).join(" ");
         this.tsRefs.tsDonate.textContent = this.tsT("button.donate", "Donate");
         this.tsRefs.tsDonate.title = this.tsT("tooltip.donate", "Support the project.");
         this.tsRefs.tsUpdateBadge.textContent = this.tsT("badge.newVersion", "New version available");

@@ -1149,4 +1149,92 @@ export const tsPanelStyles = `<style>
                         display: none;
                     }
                 }
+
+                /* ---- obvpm fork: compact toolbar --------------------------
+                   Tighter controls at the top of the panel: less height, less
+                   padding, smaller gaps. ONE block, last in the sheet so it
+                   wins by order, every rule scoped under .ts-toolbar so the
+                   rest of the panel is untouched -- and kept apart from the
+                   upstream rules on purpose, so merging upstream never
+                   conflicts here. The padding shorthand is avoided on the
+                   search field and the selects: upstream reserves their right
+                   side (the scope toggle's measured width, the arrow glyphs). */
+                .ts-toolbar {
+                    gap: 4px;
+                    padding: 6px;
+                }
+
+                .ts-toolbar .ts-title {
+                    gap: 8px;
+                    font-size: 12px;
+                }
+
+                .ts-toolbar .ts-toolbar-main {
+                    gap: 4px;
+                }
+
+                .ts-toolbar .ts-toolbar-cluster {
+                    gap: 2px;
+                    min-height: 24px;
+                    padding: 1px;
+                    border-radius: 7px;
+                }
+
+                .ts-toolbar .ts-type-chips,
+                .ts-toolbar .ts-sort-group {
+                    gap: 2px;
+                }
+
+                .ts-toolbar button,
+                .ts-toolbar select,
+                .ts-toolbar .ts-chip,
+                .ts-toolbar .ts-search {
+                    font-size: 12px;
+                    border-radius: 6px;
+                }
+
+                .ts-toolbar .ts-toolbar-cluster button,
+                .ts-toolbar .ts-type-chips .ts-chip,
+                .ts-toolbar .ts-mode-group .ts-mode-button {
+                    min-height: 20px;
+                    padding: 1px 7px;
+                }
+
+                .ts-toolbar .ts-toolbar-cluster select {
+                    min-height: 20px;
+                    padding-top: 1px;
+                    padding-bottom: 1px;
+                    padding-left: 7px;
+                }
+
+                .ts-toolbar .ts-section-button {
+                    min-width: 0;
+                }
+
+                .ts-toolbar .ts-search {
+                    min-height: 24px;
+                    padding-top: 2px;
+                    padding-bottom: 2px;
+                    padding-left: 8px;
+                }
+
+                .ts-toolbar .ts-toolbar-cluster.ts-search-cluster .ts-search-scope {
+                    min-height: 18px;
+                    height: 18px;
+                    padding: 0 7px;
+                    font-size: 10px;
+                }
+
+                .ts-toolbar .ts-toggle-button {
+                    gap: 6px;
+                    min-height: 24px;
+                    padding: 0 9px;
+                }
+
+                /* the bare buttons that sit in the toolbar row outside any
+                   group box: rescan, compare, delete selected, rebuild cache */
+                .ts-toolbar .ts-toolbar-main > button:not(.ts-toggle-button) {
+                    min-height: 24px;
+                    padding: 1px 9px;
+                }
             </style>`;

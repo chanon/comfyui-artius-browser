@@ -3,6 +3,9 @@
     sidebarId: "timesaver-artius-browser",
     sidebarIcon: "tsArtiusSidebarIcon",
     title: "Artius Browser",
+    // obvpm fork: appended to the PANEL's title only (not the sidebar tab,
+    // not the locale files) so a glance says which build is running.
+    forkLabel: "(obvpm fork)",
     label: "Browser",
     tooltip: "Timesaver Artius Browser",
     defaultLocale: "en",
