@@ -178,6 +178,9 @@ async def TSHandleAssets(ts_runtime, ts_request):
         "scopes": TSParseQueryList(ts_request.query.get("scope")),
         "root_ids": TSParseQueryList(ts_request.query.get("root_id")),
         "folder": ts_request.query.get("folder"),
+        # obvpm fork: the panel's "Recurse" toggle, off -> only the files IN the
+        # selected folder (see ts_db_query). Absent = upstream's subtree listing.
+        "folder_direct": str(ts_request.query.get("recurse") or "").lower() in {"0", "false", "no"},
         "date_from": TSParseDateToEpoch(ts_request.query.get("date_from")),
         "date_to": TSParseDateToEpoch(ts_request.query.get("date_to"), ts_end_of_day=True),
         "min_width": TSParseMaybeInt(ts_request.query.get("min_width")),

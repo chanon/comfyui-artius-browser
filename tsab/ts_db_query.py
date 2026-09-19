@@ -80,7 +80,14 @@ def TSBuildAssetQueryParts(
         ts_root_ids = list(ts_filters["root_ids"])
         ts_where_clauses.append(f"assets_view.root_id IN ({','.join('?' for _ in ts_root_ids)})")
         ts_parameters.extend(ts_root_ids)
-    if ts_filters.get("folder") is not None:
+    if ts_filters.get("folder_direct"):
+        # obvpm fork: "Recurse" off -- only the files IN the selected folder,
+        # none from its subfolders. The tree's top node is the EMPTY path, and
+        # that is a real value here (files sitting directly in a root), so it
+        # is matched like any other instead of meaning "no folder filter".
+        ts_where_clauses.append("assets_view.folder_path = ?")
+        ts_parameters.append(str(ts_filters.get("folder") or "").strip())
+    elif ts_filters.get("folder") is not None:
         ts_folder = str(ts_filters["folder"]).strip()
         if ts_folder:
             # The subtree pattern must escape LIKE wildcards the same way the
