@@ -1238,6 +1238,18 @@ export const tsPanelStyles = `<style>
                     padding: 1px 9px;
                 }
 
+                /* ---- obvpm fork: no outline around the whole panel --------
+                   The shell is focusable (it takes the keyboard shortcuts) and
+                   upstream outlines it on :focus-visible. A click does not
+                   count as keyboard focus -- but a click made while SHIFT is
+                   held does, because the Shift keydown just before it puts the
+                   browser in keyboard mode. So every shift-click range
+                   selection lit a frame around the entire panel. The selected
+                   cards already show where you are; the frame said nothing. */
+                .ts-shell:focus-visible {
+                    outline: none;
+                }
+
                 /* ---- obvpm fork: settings popup ---------------------------
                    The overlay mirrors .ts-shortcuts (whose panel, head and
                    close classes it reuses); only its own parts are here. */
