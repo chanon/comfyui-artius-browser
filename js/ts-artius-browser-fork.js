@@ -4,9 +4,11 @@
 import { tsInstallForkSettings } from "./ts-artius-browser-fork-settings.js";
 import { tsInstallForkSelectionBar } from "./ts-artius-browser-fork-selection-bar.js";
 import { tsInstallForkAssetsOnly } from "./ts-artius-browser-fork-assets-only.js";
+import { tsInstallForkToolbar } from "./ts-artius-browser-fork-toolbar.js";
 
 export function tsInstallFork(tsPanel) {
-    for (const tsInstall of [tsInstallForkSettings, tsInstallForkSelectionBar, tsInstallForkAssetsOnly]) {
+    for (const tsInstall of [tsInstallForkToolbar, tsInstallForkSettings, tsInstallForkSelectionBar,
+        tsInstallForkAssetsOnly]) {
         try {
             tsInstall(tsPanel);
         } catch (tsError) {
