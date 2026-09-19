@@ -816,9 +816,16 @@ class TSDatabase:
         ts_last_row = ts_rows[-1]
         ts_sort_key = TSResolveSortKey((ts_filters or {}).get("sort_key"))
         ts_field = TS_SORT_KEY_MAP[ts_sort_key]["row_field"]
+        ts_sort_value = ts_last_row[ts_field]
+        # obvpm fork: mtime_ns (~1.7e18) is past what a JavaScript number
+        # holds exactly (2**53), and the cursor goes through the browser. As
+        # text it survives; the client sends it back as text either way and
+        # TSCoerceSortValue reads it with int().
+        if isinstance(ts_sort_value, int) and abs(ts_sort_value) > 2 ** 53:
+            ts_sort_value = str(ts_sort_value)
         return {
             "sort_key": ts_sort_key,
-            "sort_value": ts_last_row[ts_field],
+            "sort_value": ts_sort_value,
             "id": int(ts_last_row["id"]),
         }
 
