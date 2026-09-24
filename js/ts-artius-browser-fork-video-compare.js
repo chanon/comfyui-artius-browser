@@ -184,6 +184,22 @@ const TS_FORK_COMPARE_CSS = `
         white-space: nowrap;
         pointer-events: none;
     }
+    /* upstream's close button, moved from the top-right corner (where it
+       covered the right clip's filename) to the end of the controls row */
+    .ts-viewer .ts-video-compare-shell[data-fork-layout] .ts-video-compare-controls .ts-compare-close {
+        position: static;
+        flex: none;
+        margin-left: auto;
+        width: auto;
+        min-width: 34px;
+        height: auto;
+        min-height: 30px;
+        padding: 0 10px;
+        border-radius: 8px;
+        font-size: 20px;
+        background: var(--ts-surface-ghost);
+        backdrop-filter: none;
+    }
     .ts-fork-compare-loop {
         flex: none;
         white-space: nowrap;
@@ -352,6 +368,15 @@ export function tsInstallForkVideoCompare(tsPanel) {
             tsGrid.addEventListener("pointerup", tsStop);
             tsGrid.addEventListener("pointercancel", tsStop);
             tsGrid.addEventListener("lostpointercapture", tsStop);
+        }
+        // Upstream's own close button (its click handler and label stay),
+        // moved out of the corner where it sat over the right clip's name.
+        // The stage is rebuilt by innerHTML, which detaches the button with
+        // it; appending the same element again on each rebuild brings it
+        // back, listener included.
+        const tsClose = this.tsRefs.tsCompareCloseButton;
+        if (tsClose) {
+            tsControls.append(tsClose);
         }
         tsPaint();
         return tsResult;
