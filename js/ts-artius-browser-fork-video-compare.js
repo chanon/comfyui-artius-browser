@@ -1,7 +1,8 @@
 // obvpm fork: the video comparison uses the whole stage, gets a second layout
-// for two clips -- "Split": both clips stacked, a draggable vertical divider
-// shows the first on its left and the second on its right, like upstream's
-// two-image comparison -- one compact controls row, and a Loop option.
+// -- "Split": the clips stacked in one box with a draggable vertical divider
+// between each pair, so each clip shows in its own strip left to right (two
+// clips = upstream's two-image comparison; three or four get two or three
+// dividers) -- one compact controls row, and a Loop option.
 // Upstream's compare setup only drives the <video> elements and the transport
 // (sync, buffering, frame steps) and never looks at the layout, so all of this
 // is CSS on a data attribute plus a divider; its sync engine is untouched.
@@ -10,7 +11,7 @@ const TS_FORK_COMPARE_LOOP_KEY = "tsab.fork.videoCompareLoop";
 const TS_FORK_COMPARE_LAYOUTS = [
     ["side", "fork.video.compare.side", "Side by Side", "fork.video.compare.side.hint", "The clips next to each other"],
     ["split", "fork.video.compare.split", "Split", "fork.video.compare.split.hint",
-        "The clips on top of each other: drag the divider to reveal one on each side"],
+        "The clips on top of each other: drag the dividers to reveal each in its own strip"],
 ];
 
 function tsReadLayout() {
@@ -80,10 +81,10 @@ const TS_FORK_COMPARE_CSS = `
         background: transparent;
     }
 
-    /* Split: both cards stacked in the one cell, each clipped to its side */
+    /* Split: the cards stacked in the one cell, each clipped to its strip
+       between two dividers (--ts-fork-l / --ts-fork-r, set per card) */
     .ts-viewer .ts-video-compare-shell[data-fork-layout="split"] .ts-video-compare-grid {
         display: block;
-        --ts-fork-wipe: 50%;
         cursor: ew-resize;
         touch-action: none;
         user-select: none;
@@ -94,10 +95,9 @@ const TS_FORK_COMPARE_CSS = `
         position: absolute;
         inset: 0;
         display: block;
-        clip-path: inset(0 calc(100% - var(--ts-fork-wipe)) 0 0);
-    }
-    .ts-viewer .ts-video-compare-shell[data-fork-layout="split"] .ts-video-compare-card + .ts-video-compare-card {
-        clip-path: inset(0 0 0 var(--ts-fork-wipe));
+        --ts-fork-l: 0%;
+        --ts-fork-r: 100%;
+        clip-path: inset(0 calc(100% - var(--ts-fork-r)) 0 var(--ts-fork-l));
     }
     .ts-viewer .ts-video-compare-shell[data-fork-layout="split"] .ts-video-compare-video {
         position: absolute;
@@ -107,13 +107,13 @@ const TS_FORK_COMPARE_CSS = `
     .ts-viewer .ts-video-compare-shell[data-fork-layout="split"] .ts-video-compare-label {
         position: absolute;
         top: 8px;
-        left: 8px;
+        left: calc(var(--ts-fork-l) + 8px);
         z-index: 1;
-        max-width: 45%;
+        max-width: calc(var(--ts-fork-r) - var(--ts-fork-l) - 16px);
         background: var(--ts-nav-surface);
         backdrop-filter: blur(8px);
     }
-    .ts-viewer .ts-video-compare-shell[data-fork-layout="split"] .ts-video-compare-card + .ts-video-compare-card .ts-video-compare-label {
+    .ts-viewer .ts-video-compare-shell[data-fork-layout="split"] .ts-video-compare-card:last-child .ts-video-compare-label {
         left: auto;
         right: 8px;
     }
@@ -122,7 +122,6 @@ const TS_FORK_COMPARE_CSS = `
         position: absolute;
         top: 0;
         bottom: 0;
-        left: var(--ts-fork-wipe);
         z-index: 2;
         width: 2px;
         transform: translateX(-50%);
@@ -262,8 +261,9 @@ export function tsInstallForkVideoCompare(tsPanel) {
         if (!tsShell || !tsGrid || !tsControls || tsShell.dataset.forkLayout) {
             return tsResult;
         }
-        // a split needs exactly two clips; three or four stay side by side
-        const tsCanSplit = tsGrid.querySelectorAll(".ts-video-compare-card").length === 2;
+        // a split needs at least two clips (upstream compares up to four)
+        const tsCards = Array.from(tsGrid.querySelectorAll(".ts-video-compare-card"));
+        const tsCanSplit = tsCards.length >= 2;
         const tsButtons = [];
         const tsPaint = () => {
             tsShell.dataset.forkLayout = tsCanSplit ? tsLayout : "side";
@@ -314,9 +314,29 @@ export function tsInstallForkVideoCompare(tsPanel) {
             tsControls.append(tsLoopButton);
         }
         if (tsCanSplit) {
-            const tsDivider = document.createElement("div");
-            tsDivider.className = "ts-fork-compare-divider";
-            tsGrid.append(tsDivider);
+            // N clips: N-1 cuts (percent of the width, ascending); card i shows
+            // between cut i-1 and cut i, and a divider sits on each cut
+            const tsCount = tsCards.length;
+            const tsMinStrip = 4;
+            const tsCuts = tsCards.slice(1).map((tsCard, tsIndex) => ((tsIndex + 1) * 100) / tsCount);
+            const tsDividers = tsCuts.map(() => {
+                const tsDivider = document.createElement("div");
+                tsDivider.className = "ts-fork-compare-divider";
+                tsGrid.append(tsDivider);
+                return tsDivider;
+            });
+            const tsApplyCuts = () => {
+                tsCards.forEach((tsCard, tsIndex) => {
+                    const tsLeft = tsIndex ? tsCuts[tsIndex - 1] : 0;
+                    const tsRight = tsIndex < tsCount - 1 ? tsCuts[tsIndex] : 100;
+                    tsCard.style.setProperty("--ts-fork-l", `${tsLeft.toFixed(2)}%`);
+                    tsCard.style.setProperty("--ts-fork-r", `${tsRight.toFixed(2)}%`);
+                });
+                tsDividers.forEach((tsDivider, tsIndex) => {
+                    tsDivider.style.left = `${tsCuts[tsIndex].toFixed(2)}%`;
+                });
+            };
+            tsApplyCuts();
 
             const tsGroup = document.createElement("div");
             tsGroup.className = "ts-fork-compare-layout";
@@ -338,32 +358,47 @@ export function tsInstallForkVideoCompare(tsPanel) {
             }
             tsControls.append(tsGroup);
 
-            // drag anywhere over the clips: the divider follows the pointer
-            let tsDragging = false;
-            const tsMoveTo = (tsEvent) => {
+            // drag anywhere over the clips: the nearest divider follows the
+            // pointer, kept between its neighbours
+            let tsDragIndex = -1;
+            const tsShareAt = (tsEvent) => {
                 const tsRect = tsGrid.getBoundingClientRect();
                 if (!tsRect.width) {
+                    return null;
+                }
+                return Math.max(0, Math.min(100, ((tsEvent.clientX - tsRect.left) / tsRect.width) * 100));
+            };
+            const tsMoveTo = (tsEvent) => {
+                const tsShare = tsShareAt(tsEvent);
+                if (tsShare === null || tsDragIndex < 0) {
                     return;
                 }
-                const tsShare = Math.max(0, Math.min(1, (tsEvent.clientX - tsRect.left) / tsRect.width));
-                tsGrid.style.setProperty("--ts-fork-wipe", `${(tsShare * 100).toFixed(2)}%`);
+                const tsLow = (tsDragIndex ? tsCuts[tsDragIndex - 1] : 0) + tsMinStrip;
+                const tsHigh = (tsDragIndex < tsCuts.length - 1 ? tsCuts[tsDragIndex + 1] : 100) - tsMinStrip;
+                tsCuts[tsDragIndex] = Math.max(tsLow, Math.min(tsHigh, tsShare));
+                tsApplyCuts();
             };
             tsGrid.addEventListener("pointerdown", (tsEvent) => {
                 if (tsShell.dataset.forkLayout !== "split" || tsEvent.button !== 0) {
                     return;
                 }
-                tsDragging = true;
+                const tsShare = tsShareAt(tsEvent);
+                if (tsShare === null) {
+                    return;
+                }
+                tsDragIndex = tsCuts.reduce((tsBest, tsCut, tsIndex) =>
+                    Math.abs(tsCut - tsShare) < Math.abs(tsCuts[tsBest] - tsShare) ? tsIndex : tsBest, 0);
                 tsGrid.setPointerCapture?.(tsEvent.pointerId);
                 tsEvent.preventDefault();
                 tsMoveTo(tsEvent);
             });
             tsGrid.addEventListener("pointermove", (tsEvent) => {
-                if (tsDragging) {
+                if (tsDragIndex >= 0) {
                     tsMoveTo(tsEvent);
                 }
             });
             const tsStop = () => {
-                tsDragging = false;
+                tsDragIndex = -1;
             };
             tsGrid.addEventListener("pointerup", tsStop);
             tsGrid.addEventListener("pointercancel", tsStop);

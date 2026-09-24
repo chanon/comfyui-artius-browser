@@ -20,7 +20,7 @@ This is a fork of [AlexYez/comfyui-artius-browser](https://github.com/AlexYez/co
 **Video comparison**
 
 - The clips fill the stage instead of a fixed box.
-- **Split** view for two clips: both stacked, with a draggable divider showing one on each side, like the two-image comparison.
+- **Split** view for two to four clips: all stacked, with a draggable divider between each pair so every clip shows in its own strip, like the two-image comparison.
 - Playback and frame-step controls on one row, and a **Loop** option that replays the group when the clips end. The close button sits at the end of that row instead of over the right clip's name.
 
 All fork preferences are kept in the browser's local storage; upstream's settings file is untouched.
