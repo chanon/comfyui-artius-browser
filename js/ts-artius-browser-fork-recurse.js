@@ -107,5 +107,15 @@ export function tsInstallForkRecurse(tsPanel) {
     });
 
     tsRefs.tsForkRecurse = tsToggle;
+    // For the per-root memory: read and set the choice without a fetch (the
+    // caller fetches once, after everything it restores).
+    tsRefs.tsForkRecurseValue = {
+        get: () => tsOn,
+        set: (tsValue) => {
+            tsOn = Boolean(tsValue);
+            tsWriteStored(tsOn);
+            tsRender();
+        },
+    };
     tsRender();
 }

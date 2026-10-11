@@ -1,12 +1,12 @@
 // obvpm fork: the toolbar row in the order it is used, and a shorter label.
 //
 // Order: what you are looking at comes first -- the root (Output / Input),
-// the type chips (Image Video Audio 3D), Flat / Tree -- then how it is shown
-// and narrowed, and the search field LAST, where it takes whatever width the
-// row has left instead of pushing everything after it onto a second line.
+// the type chips (Image Video Audio 3D), Flat / Tree -- then how it is
+// narrowed, the thumbnail size slider and Rescan, and the search field last,
+// where it takes whatever width the row has left.
 //
 // The elements are re-ordered in the DOM rather than with CSS `order`, so the
-// Tab key walks them in the order they are seen. Anything this list does not
+// Tab key walks them in the order they are seen. Anything these lists do not
 // know (a control upstream adds later) keeps its place before the search.
 
 const TS_FORK_TOOLBAR_ORDER = [
@@ -15,12 +15,11 @@ const TS_FORK_TOOLBAR_ORDER = [
     ".ts-type-cluster",         // Image Video Audio 3D
     ".ts-mode-group",           // Flat / Tree
     ".ts-sort-group",
-    ".ts-preview-size",
     ".ts-favorites-toggle",
     ".ts-filters-toggle",
-    ".ts-rescan",
 ];
-const TS_FORK_TOOLBAR_LAST = ".ts-search-cluster";
+// After everything else, in this order: the search field is the last control.
+const TS_FORK_TOOLBAR_LAST = [".ts-preview-size", ".ts-rescan", ".ts-search-cluster"];
 
 // English labels the fork shortens. Matched on the VALUE the active locale
 // gives, so a translation is left alone and only the English text changes.
@@ -49,9 +48,11 @@ export function tsInstallForkToolbar(tsPanel) {
         }
         tsCursor = tsElement;
     }
-    const tsLast = tsDirect(TS_FORK_TOOLBAR_LAST);
-    if (tsLast) {
-        tsRow.append(tsLast);
+    for (const tsSelector of TS_FORK_TOOLBAR_LAST) {
+        const tsLast = tsDirect(tsSelector);
+        if (tsLast) {
+            tsRow.append(tsLast);
+        }
     }
 
     const tsTranslate = tsPanel.tsT;

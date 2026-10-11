@@ -1403,4 +1403,52 @@ export const tsPanelStyles = `<style>
                     bottom: calc(var(--ts-fork-name-bottom) + var(--ts-fork-name-font-size) * 1.2
                         + 2 * var(--ts-card-badge-pad-y, 3px) + var(--ts-card-action-gap, 4px) * 0.5);
                 }
+
+                /* ---- obvpm fork: Input / Output as a toggle ----
+                   The root dropdown stays in the page (its change handler does
+                   the switch) but is not shown while the buttons are. */
+                .ts-root-group[data-fork-root-toggle="true"] .ts-root-select {
+                    display: none;
+                }
+
+                .ts-fork-root-toggle {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 2px;
+                }
+
+                .ts-fork-root-toggle[hidden] {
+                    display: none;
+                }
+
+                /* ---- obvpm fork: Flat / Tree as a dropdown ----
+                   The two buttons stay in the page (the dropdown clicks them)
+                   but are not shown; the dropdown looks like the sort menu. */
+                .ts-mode-group[data-fork-mode-select="true"] .ts-mode-button {
+                    display: none;
+                }
+
+                .ts-fork-mode-select {
+                    appearance: none;
+                    -webkit-appearance: none;
+                    font: inherit;
+                    cursor: pointer;
+                    padding: 0 20px 0 10px;
+                    border-radius: 8px;
+                    color: var(--ts-text);
+                    background: transparent;
+                    background-image:
+                        linear-gradient(45deg, transparent 50%, var(--ts-muted) 50%),
+                        linear-gradient(135deg, var(--ts-muted) 50%, transparent 50%);
+                    background-position:
+                        calc(100% - 11px) calc(50% - 2px),
+                        calc(100% - 6px) calc(50% - 2px);
+                    background-size: 5px 5px, 5px 5px;
+                    background-repeat: no-repeat;
+                }
+
+                .ts-fork-mode-select option {
+                    color: var(--ts-text);
+                    background: var(--ts-bg-1);
+                }
             </style>`;

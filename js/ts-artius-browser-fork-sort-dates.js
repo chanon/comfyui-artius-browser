@@ -83,6 +83,17 @@ export function tsInstallForkSortDates(tsPanel) {
     };
     tsSelect.addEventListener("change", tsSync);
 
+    // For the per-root memory: which date the menu means. Setting it repaints
+    // the menu, since the request reads the choice back off the menu.
+    tsPanel.tsRefs.tsForkSortDateValue = {
+        get: () => tsSync(),
+        set: (tsValue) => {
+            tsWhich = tsValue === "mtime" ? "mtime" : "created_at";
+            tsWriteStored(tsWhich);
+            tsPanel.tsRenderSortOptions();
+        },
+    };
+
     const tsBuildSearchParams = tsPanel.tsBuildSearchParams;
     tsPanel.tsBuildSearchParams = function tsForkSortBuildSearchParams(...tsArgs) {
         const tsParams = tsBuildSearchParams.apply(this, tsArgs);

@@ -12,10 +12,15 @@ import { tsInstallForkVideoCompare } from "./ts-artius-browser-fork-video-compar
 import { tsInstallForkCardNames } from "./ts-artius-browser-fork-card-names.js";
 import { tsInstallForkCardAlign } from "./ts-artius-browser-fork-card-align.js";
 import { tsInstallForkSortDates } from "./ts-artius-browser-fork-sort-dates.js";
+import { tsInstallForkHide3D } from "./ts-artius-browser-fork-hide-3d.js";
+import { tsInstallForkRootToggle } from "./ts-artius-browser-fork-root-toggle.js";
+import { tsInstallForkRootMemory } from "./ts-artius-browser-fork-root-memory.js";
+import { tsInstallForkModeSelect } from "./ts-artius-browser-fork-mode-select.js";
 
 export function tsInstallFork(tsPanel) {
-    for (const tsInstall of [tsInstallForkToolbar, tsInstallForkRecurse, tsInstallForkSettings, tsInstallForkSelectionBar,
-        tsInstallForkAssetsOnly, tsInstallForkViewerInfo, tsInstallForkVideoSize, tsInstallForkVideoCompare,
+    for (const tsInstall of [tsInstallForkToolbar, tsInstallForkModeSelect, tsInstallForkRecurse, tsInstallForkSettings, tsInstallForkSelectionBar,
+        tsInstallForkAssetsOnly, tsInstallForkHide3D, tsInstallForkRootToggle, tsInstallForkRootMemory,
+        tsInstallForkViewerInfo, tsInstallForkVideoSize, tsInstallForkVideoCompare,
         tsInstallForkCardNames, tsInstallForkCardAlign, tsInstallForkSortDates]) {
         try {
             tsInstall(tsPanel);
