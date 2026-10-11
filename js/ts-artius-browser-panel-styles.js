@@ -1451,4 +1451,29 @@ export const tsPanelStyles = `<style>
                     color: var(--ts-text);
                     background: var(--ts-bg-1);
                 }
+
+                /* ---- obvpm fork: narrower toolbar controls ----
+                   The sort menus and the Flat / Tree dropdown pad less (5 px
+                   left, a 15 px arrow zone instead of 7 + 20; the fork's
+                   narrow-toolbar module takes the same 10 px off the width the
+                   panel measures them to), the thumbnail size slider is shorter
+                   than the browser's default, and the search field asks for
+                   less room before it takes a row of its own. */
+                .ts-toolbar .ts-sort-group select,
+                .ts-toolbar select.ts-fork-mode-select {
+                    padding-left: 5px;
+                    padding-right: 15px;
+                    background-position:
+                        calc(100% - 7px) calc(50% - 2px),
+                        calc(100% - 2px) calc(50% - 2px);
+                }
+
+                .ts-toolbar .ts-preview-size {
+                    width: 100px;
+                }
+
+                .ts-toolbar .ts-toolbar-cluster.ts-search-cluster {
+                    flex: 1 1 160px;
+                    min-width: 120px;
+                }
             </style>`;

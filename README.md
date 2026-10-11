@@ -4,7 +4,7 @@ This is a fork of [AlexYez/comfyui-artius-browser](https://github.com/AlexYez/co
 
 **Browser panel**
 
-- Compact toolbar, reordered: Input | Output, file types, Flat / Tree first; thumbnail size slider, Rescan and search last.
+- Compact toolbar, reordered: Input | Output, file types, Flat / Tree first; thumbnail size slider, Rescan and search last. Narrow sort and Flat / Tree menus, a shorter slider and a search field that stays on the first row longer.
 - **Input | Output** as two buttons instead of a dropdown (can be turned off in settings, which brings the dropdown back with All).
 - **Flat / Tree** as a dropdown instead of two buttons, to save space.
 - Input and Output each **remember their own settings**: file types, Flat / Tree, Recurse, sort order, Favorites and filters.
