@@ -1,14 +1,18 @@
-// obvpm fork: how large a single video is shown in the viewer. Three modes on
+// obvpm fork: how large a single video is shown in the viewer. Three buttons on
 // the row of the previous / next frame buttons, remembered:
 //   fit      the video grows or shrinks to the stage, leaving room for the controls
-//   native   1:1, one screen pixel per video pixel, scrolls when it is larger
+//   native   1:1, one screen pixel per video pixel: the stage-filling layout of
+//            Fit, zoomed (the video zoom feature) -- drag with the middle
+//            button when it is larger than the stage
 //   centered upstream's fixed box (its rules are left alone)
+// Wheel zoom works in Fit and Centered alike; Fit / 1:1 light up when the zoom
+// is at exactly that size (the zoom feature reports every change).
 // The stage is rebuilt as markup on every render, so the <video> gets its
 // wrapper IN THE MARKUP (moving a playing video in the DOM would pause it) and
 // the buttons are added again after each render.
 const TS_FORK_VIDEO_SIZE_KEY = "tsab.fork.videoSize";
 const TS_FORK_VIDEO_SIZE_MODES = [
-    ["native", "fork.video.size.native", "1:1", "fork.video.size.native.hint", "Original size (scrolls when larger than the window)"],
+    ["native", "fork.video.size.native", "1:1", "fork.video.size.native.hint", "Original size: one video pixel per screen pixel (middle-drag to move around)"],
     ["fit", "fork.video.size.fit", "Fit", "fork.video.size.fit.hint", "Fit the window, leaving room for the controls"],
     ["centered", "fork.video.size.centered", "Centered", "fork.video.size.centered.hint", "Centered at a fixed size"],
 ];
@@ -36,8 +40,7 @@ const TS_FORK_VIDEO_SIZE_CSS = `
     .ts-fork-video-box {
         display: contents;
     }
-    .ts-video-shell[data-fork-size="fit"],
-    .ts-video-shell[data-fork-size="native"] {
+    .ts-video-shell[data-fork-size="fit"] {
         width: 100%;
         min-width: 0;
         min-height: 0;
@@ -46,8 +49,7 @@ const TS_FORK_VIDEO_SIZE_CSS = `
     }
     /* The box is sized by the stage ONLY: size containment stops the video's
        own pixel size from pushing the row (and the whole stage) larger. */
-    .ts-video-shell[data-fork-size="fit"] .ts-fork-video-box,
-    .ts-video-shell[data-fork-size="native"] .ts-fork-video-box {
+    .ts-video-shell[data-fork-size="fit"] .ts-fork-video-box {
         display: flex;
         position: relative;
         contain: size;
@@ -66,23 +68,11 @@ const TS_FORK_VIDEO_SIZE_CSS = `
         object-fit: contain;
         background: transparent;
     }
-    .ts-video-shell[data-fork-size="native"] .ts-fork-video-box {
-        overflow: auto;
-    }
-    .ts-video-shell[data-fork-size="native"] video {
-        flex: none;
-        width: auto;
-        height: auto;
-        max-width: none;
-        max-height: none;
-        margin: auto;
-    }
     @media (max-width: 1080px) {
         /* upstream stacks the info panel under the stage here, in content-sized
            rows: a contained box has no content size, so the stage's row gets
            one (the info panel scrolls, so it is the one that gives way) */
-        .ts-stage-wrap:has(.ts-video-shell[data-fork-size="fit"]),
-        .ts-stage-wrap:has(.ts-video-shell[data-fork-size="native"]) {
+        .ts-stage-wrap:has(.ts-video-shell[data-fork-size="fit"]) {
             min-height: 55vh;
         }
     }
@@ -121,14 +111,25 @@ export function tsInstallForkVideoSize(tsPanel) {
     tsViewer.shadowRoot.append(tsStyle);
 
     let tsMode = tsReadMode();
+    // what the zoom last reported for the video on screen (null: nothing yet,
+    // or no zoom in this browser -- then the remembered button is lit)
+    let tsZoomState = null;
+    const tsZoomOn = () => tsViewer.tsForkVideoZoomSupported === true;
+    // 1:1 is the Fit layout, zoomed
+    const tsLayout = () => (tsMode === "centered" ? "centered" : "fit");
     const tsPaint = () => {
         const tsShell = tsViewer.tsRefs.tsStage.querySelector(".ts-video-shell");
         if (!tsShell) {
             return;
         }
-        tsShell.dataset.forkSize = tsMode;
+        tsShell.dataset.forkSize = tsLayout();
         for (const tsButton of tsShell.querySelectorAll(".ts-fork-video-size button")) {
-            const tsActive = tsButton.dataset.mode === tsMode;
+            // without the zoom a remembered 1:1 shows as Fit
+            let tsActive = tsButton.dataset.mode === (tsMode === "native" && !tsZoomOn() ? "fit" : tsMode);
+            if (tsZoomState && tsMode !== "centered") {
+                tsActive = tsButton.dataset.mode === "fit" ? tsZoomState.tsAtFit
+                    : tsButton.dataset.mode === "native" ? tsZoomState.tsAtNative : false;
+            }
             tsButton.dataset.active = String(tsActive);
             tsButton.setAttribute("aria-pressed", String(tsActive));
         }
@@ -153,6 +154,10 @@ export function tsInstallForkVideoSize(tsPanel) {
             tsGroup.className = "ts-fork-video-size";
             tsGroup.setAttribute("role", "group");
             for (const [tsValue, tsKey, tsLabel, tsHintKey, tsHint] of TS_FORK_VIDEO_SIZE_MODES) {
+                // 1:1 is a zoom level: without the zoom it has nothing to do
+                if (tsValue === "native" && !tsZoomOn()) {
+                    continue;
+                }
                 const tsButton = document.createElement("button");
                 tsButton.type = "button";
                 tsButton.className = "ts-video-step";
@@ -162,11 +167,30 @@ export function tsInstallForkVideoSize(tsPanel) {
                 tsButton.addEventListener("click", () => {
                     tsMode = tsValue;
                     tsWriteMode(tsMode);
+                    const tsZoom = this.tsForkVideoZoom;
+                    if (tsValue === "native") {
+                        // the layout first: 1:1 is measured on the Fit box
+                        tsPaint();
+                        tsZoom?.tsNative();
+                    } else {
+                        // back to Fit before Centered, so its held size is let go
+                        tsZoom?.tsFit();
+                    }
                     tsPaint();
                 });
                 tsGroup.append(tsButton);
             }
             tsControls.append(tsGroup);
+        }
+        const tsShell = tsStage.querySelector(".ts-video-shell");
+        if (tsShell) {
+            tsZoomState = null;
+            // a remembered 1:1 opens the next video at 1:1 (the zoom reads this)
+            tsShell.dataset.forkZoomStart = tsMode === "native" ? "native" : "";
+            tsShell.addEventListener("ts-fork-video-zoom", (tsEvent) => {
+                tsZoomState = tsEvent.detail;
+                tsPaint();
+            });
         }
         tsPaint();
         return tsResult;

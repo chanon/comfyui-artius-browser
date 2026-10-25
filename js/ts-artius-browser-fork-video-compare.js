@@ -2,7 +2,8 @@
 // -- "Split": the clips stacked in one box with a draggable vertical divider
 // between each pair, so each clip shows in its own strip left to right (two
 // clips = upstream's two-image comparison; three or four get two or three
-// dividers) -- one compact controls row, and a Loop option.
+// dividers) -- one compact controls row, a Loop option, and the clips'
+// order changed by dragging their names.
 // Upstream's compare setup only drives the <video> elements and the transport
 // (sync, buffering, frame steps) and never looks at the layout, so all of this
 // is CSS on a data attribute plus a divider; its sync engine is untouched.
@@ -199,6 +200,20 @@ const TS_FORK_COMPARE_CSS = `
         background: var(--ts-surface-ghost);
         backdrop-filter: none;
     }
+    /* drag a clip's name to change the order */
+    .ts-viewer .ts-video-compare-shell[data-fork-layout] .ts-video-compare-label {
+        cursor: grab;
+        user-select: none;
+        touch-action: none;
+    }
+    .ts-viewer .ts-video-compare-shell[data-fork-reordering="true"],
+    .ts-viewer .ts-video-compare-shell[data-fork-reordering="true"] * {
+        cursor: grabbing;
+    }
+    .ts-viewer .ts-video-compare-card[data-fork-dragging="true"] .ts-video-compare-label {
+        outline: 2px solid var(--ts-accent);
+        outline-offset: 1px;
+    }
     .ts-fork-compare-loop {
         flex: none;
         white-space: nowrap;
@@ -325,8 +340,10 @@ export function tsInstallForkVideoCompare(tsPanel) {
                 tsGrid.append(tsDivider);
                 return tsDivider;
             });
+            // the cards in their CURRENT order: dragging a name reorders them
+            const tsCardsNow = () => Array.from(tsGrid.querySelectorAll(":scope > .ts-video-compare-card"));
             const tsApplyCuts = () => {
-                tsCards.forEach((tsCard, tsIndex) => {
+                tsCardsNow().forEach((tsCard, tsIndex) => {
                     const tsLeft = tsIndex ? tsCuts[tsIndex - 1] : 0;
                     const tsRight = tsIndex < tsCount - 1 ? tsCuts[tsIndex] : 100;
                     tsCard.style.setProperty("--ts-fork-l", `${tsLeft.toFixed(2)}%`);
@@ -403,6 +420,109 @@ export function tsInstallForkVideoCompare(tsPanel) {
             tsGrid.addEventListener("pointerup", tsStop);
             tsGrid.addEventListener("pointercancel", tsStop);
             tsGrid.addEventListener("lostpointercapture", tsStop);
+
+            // Drag a clip's name to change the order. The card moves while
+            // dragging, so the clip lands where the pointer is: the grid cell
+            // under it (Side by Side) or the strip under it (Split). The
+            // order is kept in tsCompareItems, which the stage is built from,
+            // so a later rebuild keeps it; a new comparison starts in grid
+            // order again. The clip the comparison was opened from stays the
+            // one with the sound wherever it goes.
+            const tsShown = (this.tsCompareItems || []).slice(0, tsCount);
+            tsCards.forEach((tsCard, tsIndex) => {
+                if (tsShown[tsIndex]) {
+                    tsCard.dataset.forkItemId = String(tsShown[tsIndex].id);
+                }
+                const tsLabel = tsCard.querySelector(".ts-video-compare-label");
+                if (tsLabel) {
+                    tsLabel.title = `${tsLabel.title}\n${this.tsT("fork.video.compare.reorder.hint", "Drag the name to change the order")}`;
+                }
+            });
+            // moveBefore keeps a playing clip playing (and its decoder warm);
+            // insertBefore is the fallback for browsers without it
+            const tsMove = (tsCard, tsBefore) => {
+                if (typeof tsGrid.moveBefore === "function") {
+                    tsGrid.moveBefore(tsCard, tsBefore);
+                } else {
+                    tsGrid.insertBefore(tsCard, tsBefore);
+                }
+            };
+            const tsCardAt = (tsEvent) => {
+                const tsNow = tsCardsNow();
+                if (tsShell.dataset.forkLayout === "split") {
+                    const tsShare = tsShareAt(tsEvent);
+                    return tsShare === null ? null : tsNow[tsCuts.filter((tsCut) => tsCut < tsShare).length];
+                }
+                // the card under the pointer, else the nearest one (gaps)
+                let tsBest = null;
+                let tsBestDistance = Infinity;
+                for (const tsCard of tsNow) {
+                    const tsRect = tsCard.getBoundingClientRect();
+                    const tsDx = Math.max(tsRect.left - tsEvent.clientX, 0, tsEvent.clientX - tsRect.right);
+                    const tsDy = Math.max(tsRect.top - tsEvent.clientY, 0, tsEvent.clientY - tsRect.bottom);
+                    const tsDistance = Math.hypot(tsDx, tsDy);
+                    if (tsDistance < tsBestDistance) {
+                        tsBest = tsCard;
+                        tsBestDistance = tsDistance;
+                    }
+                }
+                return tsBest;
+            };
+            let tsReorder = null;
+            const tsEndReorder = () => {
+                if (!tsReorder) {
+                    return;
+                }
+                delete tsReorder.tsCard.dataset.forkDragging;
+                delete tsShell.dataset.forkReordering;
+                try {
+                    tsGrid.releasePointerCapture?.(tsReorder.tsPointerId);
+                } catch {
+                    // already released
+                }
+                tsReorder = null;
+                // remember the order for any rebuild of this comparison
+                const tsItems = Array.isArray(this.tsCompareItems) ? this.tsCompareItems : [];
+                const tsOrder = tsCardsNow().map((tsCard) => tsCard.dataset.forkItemId);
+                const tsPlaced = tsOrder.map((tsId) => tsItems.find((tsItem) => String(tsItem.id) === tsId)).filter(Boolean);
+                if (tsPlaced.length === tsOrder.length) {
+                    this.tsCompareItems = [...tsPlaced, ...tsItems.filter((tsItem) => !tsPlaced.includes(tsItem))];
+                }
+            };
+            for (const tsCard of tsCards) {
+                tsCard.querySelector(".ts-video-compare-label")?.addEventListener("pointerdown", (tsEvent) => {
+                    if (tsEvent.button !== 0) {
+                        return;
+                    }
+                    // a press on a name is a reorder, not a divider drag
+                    tsEvent.preventDefault();
+                    tsEvent.stopPropagation();
+                    tsReorder = { tsCard, tsPointerId: tsEvent.pointerId };
+                    tsCard.dataset.forkDragging = "true";
+                    tsShell.dataset.forkReordering = "true";
+                    // captured on the grid, which never moves (a moved
+                    // label could lose the capture)
+                    tsGrid.setPointerCapture?.(tsEvent.pointerId);
+                });
+            }
+            tsGrid.addEventListener("pointermove", (tsEvent) => {
+                if (!tsReorder || tsEvent.pointerId !== tsReorder.tsPointerId) {
+                    return;
+                }
+                const tsTarget = tsCardAt(tsEvent);
+                if (!tsTarget || tsTarget === tsReorder.tsCard) {
+                    return;
+                }
+                const tsNow = tsCardsNow();
+                const tsFrom = tsNow.indexOf(tsReorder.tsCard);
+                const tsTo = tsNow.indexOf(tsTarget);
+                // into the target's place: after it when moving right, before it when moving left
+                tsMove(tsReorder.tsCard, tsTo > tsFrom ? tsTarget.nextSibling : tsTarget);
+                tsApplyCuts();
+            });
+            tsGrid.addEventListener("pointerup", tsEndReorder);
+            tsGrid.addEventListener("pointercancel", tsEndReorder);
+            tsGrid.addEventListener("lostpointercapture", tsEndReorder);
         }
         // Upstream's own close button (its click handler and label stay),
         // moved out of the corner where it sat over the right clip's name.
