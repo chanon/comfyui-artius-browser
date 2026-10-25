@@ -20,6 +20,7 @@ This is a fork of [AlexYez/comfyui-artius-browser](https://github.com/AlexYez/co
 
 - **Info** button (or the `I` key) hides the information panel so the image or video gets the full width. Remembered.
 - Video zoom: mouse wheel up zooms in at the cursor, wheel down zooms back out and stops at Fit; drag with the middle mouse button to move around a zoomed video. **1:1**, **Fit** (default) and **Centered** buttons with the zoom shown next to them (1:1 is remembered for the next video), and upstream's `+` `-` `0` `1` keys work too. The video's own play / seek / volume bar stays the same size while zoomed. Needs a Chromium browser (Chrome, Edge); elsewhere the 1:1 button is hidden and there is no zoom.
+- The **volume** (and mute) is remembered: every video, and every comparison, starts at the level you last set in either.
 
 **Video comparison**
 
@@ -29,6 +30,8 @@ This is a fork of [AlexYez/comfyui-artius-browser](https://github.com/AlexYez/co
 - **Drag a clip's name** to change the order of the clips (Side by Side and Split; playback carries on). A new comparison starts in the grid's order.
 - Clips with the **same file name** show their folders in front of the name, back to the first folder where they differ (`base/clip_00001.mp4`, `fl2va/clip_00001.mp4`); the tooltip has the full path.
 - Playback and frame-step controls on one row, and a **Loop** option that replays the group when the clips end. The close button sits at the end of that row instead of over the right clip's name.
+- **Volume**: a speaker button (mute) and a slider after the time, for the clip you opened the comparison from (the others are silent, as upstream).
+- **Full Screen** button next to Fit / 1:1: the clips and the controls row fill the screen. Esc (or the button) comes back to the viewer without closing it.
 
 All fork preferences are kept in the browser's local storage; upstream's settings file is untouched.
 
