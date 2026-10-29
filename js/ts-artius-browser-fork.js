@@ -10,9 +10,11 @@ import { tsInstallForkViewerInfo } from "./ts-artius-browser-fork-viewer-info.js
 import { tsInstallForkVideoSize } from "./ts-artius-browser-fork-video-size.js";
 import { tsInstallForkCompareNames } from "./ts-artius-browser-fork-compare-names.js";
 import { tsInstallForkVideoCompare } from "./ts-artius-browser-fork-video-compare.js";
+import { tsInstallForkVideoBar } from "./ts-artius-browser-fork-video-bar.js";
 import { tsInstallForkVideoZoom } from "./ts-artius-browser-fork-video-zoom.js";
 import { tsInstallForkVideoVolume } from "./ts-artius-browser-fork-video-volume.js";
 import { tsInstallForkVideoFullscreen } from "./ts-artius-browser-fork-video-fullscreen.js";
+import { tsInstallForkCopyName } from "./ts-artius-browser-fork-copy-name.js";
 import { tsInstallForkCardNames } from "./ts-artius-browser-fork-card-names.js";
 import { tsInstallForkCardAlign } from "./ts-artius-browser-fork-card-align.js";
 import { tsInstallForkSortDates } from "./ts-artius-browser-fork-sort-dates.js";
@@ -25,7 +27,7 @@ import { tsInstallForkNarrowToolbar } from "./ts-artius-browser-fork-narrow-tool
 export function tsInstallFork(tsPanel) {
     for (const tsInstall of [tsInstallForkToolbar, tsInstallForkNarrowToolbar, tsInstallForkModeSelect, tsInstallForkRecurse, tsInstallForkSettings, tsInstallForkSelectionBar,
         tsInstallForkAssetsOnly, tsInstallForkHide3D, tsInstallForkRootToggle, tsInstallForkRootMemory,
-        tsInstallForkViewerInfo, tsInstallForkVideoSize, tsInstallForkCompareNames, tsInstallForkVideoCompare, tsInstallForkVideoZoom, tsInstallForkVideoVolume, tsInstallForkVideoFullscreen,
+        tsInstallForkViewerInfo, tsInstallForkVideoSize, tsInstallForkCompareNames, tsInstallForkVideoCompare, tsInstallForkVideoBar, tsInstallForkVideoZoom, tsInstallForkVideoVolume, tsInstallForkVideoFullscreen, tsInstallForkCopyName,
         tsInstallForkCardNames, tsInstallForkCardAlign, tsInstallForkSortDates]) {
         try {
             tsInstall(tsPanel);

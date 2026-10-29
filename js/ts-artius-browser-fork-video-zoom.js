@@ -68,10 +68,11 @@ function tsPx(tsValue) {
 // One zoom for a set of clips: one scale (relative to each clip's own Fit)
 // and one centre point (as a share of the picture), so clips compared side
 // by side or split always show the same part at the same size.
-// tsVideos[0] is the clip "1:1" and the readout are measured on.
-function tsCreateVideoZoom({ tsVideos, tsSurface, tsLockSize, tsOnChange }) {
+// tsMainOf() is the clip "1:1" and the readout are measured on (default
+// tsVideos[0]); it may change while the zoom lives -- call tsRemeasure then.
+function tsCreateVideoZoom({ tsVideos, tsSurface, tsLockSize, tsOnChange, tsMainOf = () => tsVideos[0] }) {
     const tsLimits = tsViewerSettings.imageZoom;
-    const tsMain = tsVideos[0];
+    let tsMain = tsMainOf();
     let tsScale = 1;
     let tsCenterX = 0.5;
     let tsCenterY = 0.5;
@@ -332,6 +333,20 @@ function tsCreateVideoZoom({ tsVideos, tsSurface, tsLockSize, tsOnChange }) {
             tsApply();
         })
         : null;
+    // another clip became the main one (the comparison was reordered): 1:1
+    // stays exact for the new one, the readout is read off it
+    const tsRemeasure = () => {
+        const tsNext = tsMainOf();
+        if (!tsNext || tsNext === tsMain) {
+            return;
+        }
+        tsMain = tsNext;
+        if (tsAtNative && tsNativeScale()) {
+            tsScale = tsNativeScale();
+        }
+        tsSettleCenter();
+        tsApply();
+    };
     // a held (Centered) size cannot follow the window: back to Fit
     const tsHandleWindowResize = () => {
         if (tsLocked.size) {
@@ -360,6 +375,7 @@ function tsCreateVideoZoom({ tsVideos, tsSurface, tsLockSize, tsOnChange }) {
         tsFit,
         tsNative,
         tsState,
+        tsRemeasure,
         // what upstream's zoom keys call (+ / - / 0 / 1)
         tsHandler: {
             tsZoomBy: (tsFactor) => tsZoomTo(tsScale * tsFactor),
@@ -453,9 +469,9 @@ export function tsInstallForkVideoZoom(tsPanel) {
             if (!tsGrid || !tsControls || !tsVideos.length) {
                 return tsResult;
             }
-            // the clip the comparison was opened from is the one 1:1 is exact for
-            const tsPrimaryIndex = Math.max(0, tsVideos.findIndex((tsVideo) => tsVideo.dataset.primary === "true"));
-            tsVideos.unshift(...tsVideos.splice(tsPrimaryIndex, 1));
+            // 1:1 is exact for the FIRST clip (left-most; top-left in a grid of
+            // four), and follows when another one is dragged to the front
+            const tsFirstVideo = () => tsGrid.querySelector(":scope > .ts-video-compare-card video") || tsVideos[0];
 
             const tsGroup = document.createElement("div");
             tsGroup.className = "ts-fork-zoom-buttons";
@@ -463,7 +479,7 @@ export function tsInstallForkVideoZoom(tsPanel) {
             const tsButtons = {};
             for (const [tsValue, tsKey, tsText, tsHintKey, tsHint] of [
                 ["fit", "fork.video.size.fit", "Fit", "fork.video.zoom.fit.hint", "Fit the clips to their boxes"],
-                ["native", "fork.video.size.native", "1:1", "fork.video.zoom.native.hint", "One video pixel per screen pixel (measured on the clip you opened)"],
+                ["native", "fork.video.size.native", "1:1", "fork.video.zoom.native.hint", "One video pixel per screen pixel (measured on the left-most clip)"],
             ]) {
                 const tsButton = document.createElement("button");
                 tsButton.type = "button";
@@ -481,10 +497,11 @@ export function tsInstallForkVideoZoom(tsPanel) {
                 || tsControls.querySelector(".ts-compare-close");
             tsControls.insertBefore(tsGroup, tsBefore);
             tsControls.insertBefore(tsLabel, tsBefore);
-            tsZoom = tsCreateVideoZoom({
+            const tsCompareZoom = tsCreateVideoZoom({
                 tsVideos,
                 tsSurface: tsGrid,
                 tsLockSize: () => false,
+                tsMainOf: tsFirstVideo,
                 tsOnChange: (tsState) => {
                     tsLabel.textContent = tsReadout(tsState);
                     for (const [tsValue, tsButton] of Object.entries(tsButtons)) {
@@ -494,6 +511,17 @@ export function tsInstallForkVideoZoom(tsPanel) {
                     }
                 },
             });
+            tsZoom = tsCompareZoom;
+            // the reorder (video compare feature) moves the cards in the grid
+            if (typeof MutationObserver === "function") {
+                const tsOrderObserver = new MutationObserver(() => tsCompareZoom.tsRemeasure());
+                tsOrderObserver.observe(tsGrid, { childList: true });
+                const tsDestroy = tsCompareZoom.tsDestroy;
+                tsCompareZoom.tsDestroy = () => {
+                    tsOrderObserver.disconnect();
+                    tsDestroy();
+                };
+            }
         }
         if (!tsZoom) {
             return tsResult;
