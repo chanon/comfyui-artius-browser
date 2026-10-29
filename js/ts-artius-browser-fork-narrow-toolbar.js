@@ -29,9 +29,10 @@ export function tsInstallForkNarrowToolbar(tsPanel) {
         }
         return tsResult;
     };
-    // the sort menus may already be sized
+    // the sort menus may already be sized (since upstream 1.20.0 the direction
+    // is a button, not a dropdown: only dropdowns are sized)
     for (const tsSelect of [tsPanel.tsRefs?.tsSortSelect, tsPanel.tsRefs?.tsSortDirection]) {
-        if (tsSelect) {
+        if (tsSelect?.tagName === "SELECT") {
             tsPanel.tsResizeSelectToCurrent(tsSelect);
         }
     }

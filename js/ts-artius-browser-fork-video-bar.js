@@ -1,29 +1,31 @@
 // obvpm fork: the single video gets the video comparison's play bar instead of
-// the browser's own controls -- one row: Play | seek | time (| volume) |
-// previous frame | Frame N | next frame | Loop | 1:1 | Fit | Centered | zoom
-// readout (| Full Screen). The volume and Full Screen come from their own
-// features, which look for this bar's transport. A click on the picture plays
-// / pauses, and so does Space (the browser's controls did both).
-// Upstream's frame stepper (its buttons, its frame label, the arrow keys) is
-// left as it is: this only adds the transport and the Loop toggle, and drops
-// the `controls` attribute from the <video> in the stage markup.
+// the browser's own controls -- one row: Play | seek | time (| volume) | first
+// frame | previous frame | Frame N | next frame | last frame | Loop | 1:1 |
+// Fit | Centered | zoom readout (| Full Screen). The volume and Full Screen
+// come from their own features, which look for this bar's transport. A click on
+// the picture plays / pauses (the browser's controls did that); Space is
+// upstream's (since 1.20.0 it presses the stage's .ts-video-play-toggle, which
+// is this bar's Play button).
+// Upstream's frame stepper, First / Last frame buttons and Loop toggle (1.20.1)
+// are left as they are -- the Loop is only moved to the end of the frame
+// steps, as in the comparison. This adds the transport and drops the
+// `controls` attribute from the <video> in the stage markup.
 import { tsFormatTime } from "./ts-artius-browser-viewer-format.js";
 
+// the fork's own single-video Loop (before upstream had one): carried over
+// once into upstream's setting, which now drives every player's Loop
 const TS_FORK_VIDEO_LOOP_KEY = "tsab.fork.videoLoop";
+const TS_UPSTREAM_LOOP_KEY = "tsArtiusBrowser.lightboxLoop";
 
-function tsReadLoop() {
+function tsCarryLoopSetting() {
     try {
-        return window.localStorage.getItem(TS_FORK_VIDEO_LOOP_KEY) === "1";
+        const tsOld = window.localStorage.getItem(TS_FORK_VIDEO_LOOP_KEY);
+        if (tsOld !== null && window.localStorage.getItem(TS_UPSTREAM_LOOP_KEY) === null) {
+            window.localStorage.setItem(TS_UPSTREAM_LOOP_KEY, tsOld === "1" ? "1" : "0");
+        }
+        window.localStorage.removeItem(TS_FORK_VIDEO_LOOP_KEY);
     } catch {
-        return false;
-    }
-}
-
-function tsWriteLoop(tsOn) {
-    try {
-        window.localStorage.setItem(TS_FORK_VIDEO_LOOP_KEY, tsOn ? "1" : "0");
-    } catch {
-        // private mode: the choice still holds for this page
+        // private mode: nothing was saved
     }
 }
 
@@ -41,9 +43,11 @@ const TS_FORK_VIDEO_BAR_CSS = `
         min-width: 0;
     }
     .ts-video-shell .ts-video-controls:has(> .ts-video-transport) > .ts-video-step,
+    .ts-video-shell .ts-video-controls:has(> .ts-video-transport) > .ts-video-loop,
     .ts-video-shell .ts-video-controls:has(> .ts-video-transport) > .ts-fork-video-size,
     .ts-video-shell .ts-video-controls:has(> .ts-video-transport) > .ts-fork-zoom-readout {
         flex: none;
+        white-space: nowrap;
     }
     .ts-video-shell .ts-video-controls:has(> .ts-video-transport) > .ts-video-frame {
         flex: none;
@@ -56,14 +60,6 @@ const TS_FORK_VIDEO_BAR_CSS = `
     .ts-video-shell video[data-fork-bar] {
         cursor: pointer;
     }
-    .ts-fork-video-loop {
-        flex: none;
-        white-space: nowrap;
-    }
-    .ts-fork-video-loop[data-active="true"] {
-        border-color: var(--ts-accent);
-        background: color-mix(in srgb, var(--ts-accent) 18%, var(--ts-bg-2));
-    }
     /* a long row: the transport gets a line of its own before the seek bar
        gets short. Measured on the player's own width, not the window's (the
        info panel takes a varying share of the window). The shell's width
@@ -71,7 +67,7 @@ const TS_FORK_VIDEO_BAR_CSS = `
     .ts-video-shell:has(> .ts-video-controls > .ts-video-transport) {
         container: ts-fork-video-bar / inline-size;
     }
-    @container ts-fork-video-bar (max-width: 1200px) {
+    @container ts-fork-video-bar (max-width: 1300px) {
         .ts-video-shell .ts-video-controls:has(> .ts-video-transport) {
             flex-wrap: wrap;
             justify-content: center;
@@ -94,10 +90,7 @@ export function tsInstallForkVideoBar(tsPanel) {
     const tsStyle = document.createElement("style");
     tsStyle.textContent = TS_FORK_VIDEO_BAR_CSS;
     tsViewer.shadowRoot.append(tsStyle);
-
-    let tsLoop = tsReadLoop();
-    // the single video on screen with this bar (Space plays / pauses it)
-    let tsActiveVideo = null;
+    tsCarryLoopSetting();
 
     const tsBuildStageMarkup = tsViewer.tsBuildStageMarkup;
     tsViewer.tsBuildStageMarkup = function (...tsArgs) {
@@ -113,33 +106,17 @@ export function tsInstallForkVideoBar(tsPanel) {
         }
     };
 
-    const tsHandleKeydown = tsViewer.tsHandleKeydown;
-    tsViewer.tsHandleKeydown = function (tsEvent) {
-        if (tsEvent.key === " " && tsActiveVideo?.isConnected && !tsEvent.ctrlKey && !tsEvent.metaKey && !tsEvent.altKey) {
-            // a focused button / field keeps its own Space
-            const tsTarget = tsEvent.composedPath?.()[0] || tsEvent.target;
-            if (!tsTarget?.closest?.("button, input, select, textarea, [contenteditable]")) {
-                tsEvent.preventDefault();
-                tsToggle(tsActiveVideo);
-                return;
-            }
-        }
-        return tsHandleKeydown.call(this, tsEvent);
-    };
-
     const tsBindStageInteractions = tsViewer.tsBindStageInteractions;
     tsViewer.tsBindStageInteractions = function (...tsArgs) {
         const tsResult = tsBindStageInteractions.apply(this, tsArgs);
         const tsShell = this.tsRefs.tsStage.querySelector(".ts-video-shell");
         const tsVideo = tsShell?.querySelector("video");
         const tsControls = tsShell?.querySelector(".ts-video-controls");
-        tsActiveVideo = null;
         // the markup still has its controls (upstream changed it): leave it be
         if (!tsVideo || !tsControls || tsVideo.controls || tsControls.querySelector(".ts-video-transport")) {
             return tsResult;
         }
         tsVideo.dataset.forkBar = "true";
-        tsActiveVideo = tsVideo;
 
         const tsTransport = document.createElement("div");
         tsTransport.className = "ts-video-transport";
@@ -153,7 +130,7 @@ export function tsInstallForkVideoBar(tsPanel) {
         tsSeek.max = "0";
         tsSeek.step = "0.001";
         tsSeek.value = "0";
-        tsSeek.setAttribute("aria-label", this.tsT("fork.video.seek", "Position"));
+        tsSeek.setAttribute("aria-label", this.tsT("label.playbackPosition", "Playback position"));
         const tsTime = document.createElement("div");
         tsTime.className = "ts-video-time";
         tsTransport.append(tsPlay, tsSeek, tsTime);
@@ -226,26 +203,13 @@ export function tsInstallForkVideoBar(tsPanel) {
             tsStartTick();
         });
 
-        const tsLoopButton = document.createElement("button");
-        tsLoopButton.type = "button";
-        tsLoopButton.className = "ts-video-step ts-fork-video-loop";
-        tsLoopButton.textContent = this.tsT("fork.video.compare.loop", "Loop");
-        const tsPaintLoop = () => {
-            tsVideo.loop = tsLoop;
-            tsLoopButton.dataset.active = String(tsLoop);
-            tsLoopButton.setAttribute("aria-pressed", String(tsLoop));
-            tsLoopButton.title = tsLoop
-                ? this.tsT("fork.video.loop.on", "Looping: playback starts over at the end")
-                : this.tsT("fork.video.loop.off", "Play once and stop at the end");
-        };
-        tsLoopButton.addEventListener("click", () => {
-            tsLoop = !tsLoop;
-            tsWriteLoop(tsLoop);
-            tsPaintLoop();
-        });
-        tsPaintLoop();
-        // after the frame steps, before the size buttons (as in the comparison)
-        tsControls.insertBefore(tsLoopButton, tsControls.querySelector(".ts-fork-video-size"));
+        // upstream's Loop: after the frame steps, before the size buttons (as
+        // in the comparison)
+        const tsLoopButton = tsControls.querySelector(".ts-video-loop");
+        if (tsLoopButton) {
+            tsLoopButton.classList.add("ts-video-step");      // the row's button size
+            tsControls.insertBefore(tsLoopButton, tsControls.querySelector(".ts-fork-video-size"));
+        }
 
         tsPaint();
         if (!tsVideo.paused) {
@@ -256,9 +220,6 @@ export function tsInstallForkVideoBar(tsPanel) {
             if (tsFrame) {
                 window.cancelAnimationFrame(tsFrame);
                 tsFrame = 0;
-            }
-            if (tsActiveVideo === tsVideo) {
-                tsActiveVideo = null;
             }
             if (typeof tsUpstreamCleanup === "function") {
                 tsUpstreamCleanup();

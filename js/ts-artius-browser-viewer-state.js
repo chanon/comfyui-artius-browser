@@ -65,6 +65,55 @@ export function tsResolveVideoFrameTime(tsCurrentTime, tsFPS, tsDirection, tsDur
     return tsTargetTime;
 }
 
+// The last frame of a clip as a seek target: the middle of its final frame.
+// Seeking to `duration` itself lands past the last frame, where some decoders
+// show nothing and every one reports "ended".
+export function tsResolveLastFrameTime(tsDuration, tsFPS) {
+    const tsSafeFPS = Number.isFinite(tsFPS) && tsFPS > 0 ? tsFPS : 30;
+    const tsSafeDuration = Number.isFinite(tsDuration) && tsDuration > 0 ? tsDuration : 0;
+    return tsSafeDuration > 0 ? Math.max(0, tsSafeDuration - 0.5 / tsSafeFPS) : 0;
+}
+
+// Within one frame of the end counts as "on the last frame": a step to the
+// last frame lands half a frame before the end, never exactly on it.
+export function tsIsOnLastFrame(tsCurrentTime, tsDuration, tsFPS) {
+    const tsSafeFPS = Number.isFinite(tsFPS) && tsFPS > 0 ? tsFPS : 30;
+    const tsSafeDuration = Number.isFinite(tsDuration) && tsDuration > 0 ? tsDuration : 0;
+    return tsSafeDuration > 0 && (Number(tsCurrentTime) || 0) >= tsSafeDuration - 1 / tsSafeFPS;
+}
+
+// Where a clip opens when the one before it was left paused: the same moment,
+// clamped to its own length, or its own last frame when the previous clip was
+// parked on its end - so flipping through finished clips compares their last
+// frames, whatever their lengths.
+export function tsResolveCarriedVideoTime(tsCarry, tsDuration, tsFPS) {
+    const tsLastFrameTime = tsResolveLastFrameTime(tsDuration, tsFPS);
+    if (!tsCarry) {
+        return 0;
+    }
+    if (tsCarry.tsAtEnd) {
+        return tsLastFrameTime;
+    }
+    return Math.max(0, Math.min(tsLastFrameTime, Number(tsCarry.tsTime) || 0));
+}
+
+// One zoom factor for a wheel event, whatever produced it. A mouse wheel
+// sends one ~100px notch per click and should keep the familiar fixed step; a
+// trackpad sends dozens of tiny deltas per gesture, and a fixed step per event
+// made it race through the whole range. Scaling by the distance makes both
+// feel right. deltaMode 1 = lines, 2 = pages.
+export function tsResolveWheelZoomFactor(tsDeltaY, tsDeltaMode, tsStepIn) {
+    const tsPixels = Number(tsDeltaY || 0) * (tsDeltaMode === 1 ? 33 : (tsDeltaMode === 2 ? 400 : 1));
+    if (!Number.isFinite(tsPixels) || tsPixels === 0) {
+        return 1;
+    }
+    const tsNotch = 100;
+    const tsStepLog = Math.log(Math.max(1.0001, Number(tsStepIn) || 1.14));
+    // Clamped to one notch per event, so a flung wheel cannot jump the range.
+    const tsNotches = Math.max(-1, Math.min(1, -tsPixels / tsNotch));
+    return Math.exp(tsNotches * tsStepLog);
+}
+
 export function tsSyncViewerItemsFromSource(tsOptions = {}) {
     if (typeof tsOptions.getItems !== "function") {
         return {
@@ -81,7 +130,23 @@ export function tsSyncViewerItemsFromSource(tsOptions = {}) {
             tsIndex: tsOptions.index,
         };
     }
-    const tsItems = [...tsSourceItems];
+    // The panel's list never carries an asset's detail (prompt, technical
+    // info): the lightbox fetches that itself. Syncing used to replace those
+    // merged objects with the bare cards on every forward step, so each visit
+    // fetched the detail again and re-rendered the stage when it came back.
+    // A viewer copy is kept while it still describes the same file.
+    const tsLoadedById = new Map(
+        (Array.isArray(tsOptions.items) ? tsOptions.items : [])
+            .filter((tsItem) => tsItem?.detail_loaded)
+            .map((tsItem) => [tsItem.id, tsItem]),
+    );
+    const tsItems = tsSourceItems.map((tsItem) => {
+        const tsLoaded = tsLoadedById.get(tsItem?.id);
+        if (!tsLoaded || tsItem?.detail_loaded || tsLoaded.file_url !== tsItem.file_url) {
+            return tsItem;
+        }
+        return { ...tsLoaded, ...tsItem, detail_loaded: true };
+    });
     const tsCurrentAssetId = tsOptions.preferredAssetId ?? tsOptions.items?.[tsOptions.index]?.id ?? null;
     if (tsCurrentAssetId !== null) {
         const tsMatchedIndex = tsItems.findIndex((tsItem) => tsItem.id === tsCurrentAssetId);

@@ -2,13 +2,16 @@
 // -- "Split": the clips stacked in one box with a draggable vertical divider
 // between each pair, so each clip shows in its own strip left to right (two
 // clips = upstream's two-image comparison; three or four get two or three
-// dividers) -- one compact controls row, a Loop option, and the clips'
-// order changed by dragging their names.
+// dividers) -- one compact controls row (upstream's Loop moved into it), and
+// the clips' order changed by dragging their names.
 // Upstream's compare setup only drives the <video> elements and the transport
 // (sync, buffering, frame steps) and never looks at the layout, so all of this
 // is CSS on a data attribute plus a divider; its sync engine is untouched.
 const TS_FORK_COMPARE_KEY = "tsab.fork.videoCompare";
+// the fork's own Loop (before upstream 1.20.1 had one): its setting is carried
+// over once into upstream's, which now drives every player's Loop
 const TS_FORK_COMPARE_LOOP_KEY = "tsab.fork.videoCompareLoop";
+const TS_UPSTREAM_LOOP_KEY = "tsArtiusBrowser.lightboxLoop";
 const TS_FORK_COMPARE_LAYOUTS = [
     ["side", "fork.video.compare.side", "Side by Side", "fork.video.compare.side.hint", "The clips next to each other"],
     ["split", "fork.video.compare.split", "Split", "fork.video.compare.split.hint",
@@ -23,19 +26,15 @@ function tsReadLayout() {
     }
 }
 
-function tsReadLoop() {
+function tsCarryLoopSetting() {
     try {
-        return window.localStorage.getItem(TS_FORK_COMPARE_LOOP_KEY) === "1";
+        const tsOld = window.localStorage.getItem(TS_FORK_COMPARE_LOOP_KEY);
+        if (tsOld !== null && window.localStorage.getItem(TS_UPSTREAM_LOOP_KEY) === null) {
+            window.localStorage.setItem(TS_UPSTREAM_LOOP_KEY, tsOld === "1" ? "1" : "0");
+        }
+        window.localStorage.removeItem(TS_FORK_COMPARE_LOOP_KEY);
     } catch {
-        return false;
-    }
-}
-
-function tsWriteLoop(tsOn) {
-    try {
-        window.localStorage.setItem(TS_FORK_COMPARE_LOOP_KEY, tsOn ? "1" : "0");
-    } catch {
-        // private mode: the choice still holds for this page
+        // private mode: nothing was saved
     }
 }
 
@@ -214,13 +213,10 @@ const TS_FORK_COMPARE_CSS = `
         outline: 2px solid var(--ts-accent);
         outline-offset: 1px;
     }
-    .ts-fork-compare-loop {
+    /* upstream's Loop, moved out of the transport into the row */
+    .ts-viewer .ts-video-compare-shell[data-fork-layout] .ts-video-compare-controls > .ts-video-loop {
         flex: none;
         white-space: nowrap;
-    }
-    .ts-fork-compare-loop[data-active="true"] {
-        border-color: var(--ts-accent);
-        background: color-mix(in srgb, var(--ts-accent) 18%, var(--ts-bg-2));
     }
     .ts-fork-compare-layout {
         flex: none;
@@ -265,7 +261,7 @@ export function tsInstallForkVideoCompare(tsPanel) {
     tsViewer.shadowRoot.append(tsStyle);
 
     let tsLayout = tsReadLayout();
-    let tsLoop = tsReadLoop();
+    tsCarryLoopSetting();
 
     const tsBindStageInteractions = tsViewer.tsBindStageInteractions;
     tsViewer.tsBindStageInteractions = function (...tsArgs) {
@@ -288,44 +284,14 @@ export function tsInstallForkVideoCompare(tsPanel) {
                 tsButton.setAttribute("aria-pressed", String(tsActive));
             }
         };
-        // Loop. Upstream stops the group in ONE place -- the primary clip's
-        // `ended` pauses everything -- and already treats Play on a finished
-        // group as "rewind all and replay". So looping is pressing its own
-        // Play button once that has happened: the rewind, the re-sync and the
-        // buffering hold all stay upstream's. Deferred, so it does not matter
-        // whether this listener or upstream's runs first.
-        const tsPlayToggle = tsControls.querySelector(".ts-video-play-toggle");
-        const tsVideos = Array.from(tsGrid.querySelectorAll("video"));
-        const tsPrimary = tsVideos.find((tsVideo) => tsVideo.dataset.primary === "true") || tsVideos[0];
-        if (tsPlayToggle && tsPrimary) {
-            const tsLoopButton = document.createElement("button");
-            tsLoopButton.type = "button";
-            tsLoopButton.className = "ts-video-step ts-fork-compare-loop";
-            tsLoopButton.textContent = this.tsT("fork.video.compare.loop", "Loop");
-            const tsPaintLoop = () => {
-                tsLoopButton.dataset.active = String(tsLoop);
-                tsLoopButton.setAttribute("aria-pressed", String(tsLoop));
-                tsLoopButton.title = tsLoop
-                    ? this.tsT("fork.video.compare.loop.on", "Looping: playback starts over when the clips end")
-                    : this.tsT("fork.video.compare.loop.off", "Play once and stop at the end");
-            };
-            tsLoopButton.addEventListener("click", () => {
-                tsLoop = !tsLoop;
-                tsWriteLoop(tsLoop);
-                tsPaintLoop();
-            });
-            tsPrimary.addEventListener("ended", () => {
-                if (!tsLoop) {
-                    return;
-                }
-                window.setTimeout(() => {
-                    // still this stage, still at the end, still wanted
-                    if (tsLoop && tsPlayToggle.isConnected && tsPrimary.ended) {
-                        tsPlayToggle.click();
-                    }
-                }, 0);
-            });
-            tsPaintLoop();
+        // Loop: upstream's own toggle (1.20.1: one remembered setting for every
+        // player, built into its sync engine -- at the end the group starts
+        // over or every clip stops on its own last frame), moved from the
+        // transport to the row, after the frame steps, styled as the row's
+        // other buttons. Moved, not rebuilt: its listener and label stay.
+        const tsLoopButton = tsControls.querySelector(".ts-video-loop");
+        if (tsLoopButton) {
+            tsLoopButton.classList.add("ts-video-step");
             tsControls.append(tsLoopButton);
         }
         if (tsCanSplit) {

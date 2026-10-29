@@ -5,6 +5,7 @@ import asyncio
 from aiohttp import web as TSWeb
 from .ts_route_errors import TSWrapRouteHandler
 from .ts_settings import (
+    TS_ARCHIVE_MAX_ASSETS,
     TS_DEFAULT_PAGE_SIZE,
     TS_MAX_3D_CAPTURE_DATA_URL_LENGTH,
     TS_MAX_INDEX_FILE_PATH_LENGTH,
@@ -27,11 +28,16 @@ TS_ROUTE_DEFINITIONS = (
     ("GET", "/asset_browser/preview/{id}", "TSHandlePreview"),
     ("POST", "/asset_browser/preview/{id}/warm", "TSHandlePreviewWarm"),
     ("GET", "/asset_browser/file", "TSHandleFile"),
+    ("GET", "/asset_browser/display/{id}", "TSHandleDisplay"),
     ("POST", "/asset_browser/rescan", "TSHandleRescan"),
     ("POST", "/asset_browser/index_files", "TSHandleIndexFiles"),
     ("POST", "/asset_browser/rebuild_cache", "TSHandleRebuildCache"),
     ("POST", "/asset_browser/delete", "TSHandleDelete"),
+    ("POST", "/asset_browser/archive", "TSHandleArchiveBuild"),
+    ("GET", "/asset_browser/archive/{token}", "TSHandleArchiveDownload"),
     ("POST", "/asset_browser/favorite/{id}", "TSHandleFavorite"),
+    ("POST", "/asset_browser/reveal/{id}", "TSHandleReveal"),
+    ("POST", "/asset_browser/workflow/reveal", "TSHandleWorkflowReveal"),
     ("GET", "/asset_browser/settings", "TSHandleSettingsGet"),
     ("POST", "/asset_browser/settings", "TSHandleSettingsPost"),
     ("POST", "/asset_browser/workflow/delete", "TSHandleWorkflowDelete"),
@@ -242,6 +248,13 @@ async def TSHandleFile(ts_runtime, ts_request):
     return await asyncio.to_thread(ts_runtime.TSBuildFileResponse, ts_path=ts_path, ts_asset_id=ts_asset_id)
 
 
+async def TSHandleDisplay(ts_runtime, ts_request):
+    ts_asset_id = TSParseRouteAssetId(ts_request)
+    ts_force_proxy = str(ts_request.query.get("proxy") or "").lower() in {"1", "true", "yes"}
+    TSLogVerbose("route.display.request", asset_id=ts_asset_id, force_proxy=ts_force_proxy, path=ts_request.path)
+    return await asyncio.to_thread(ts_runtime.TSBuildDisplayResponse, ts_asset_id, ts_force_proxy)
+
+
 # The only scopes a root can carry (see TSStoragePaths.TSBuildBaseRoots). A
 # rescan for anything else can never match a root, so it is a client error
 # rather than a scan nobody asked for.
@@ -317,6 +330,60 @@ async def TSHandleDelete(ts_runtime, ts_request):
     return TSWeb.json_response(ts_result)
 
 
+TS_ARCHIVE_STREAM_CHUNK_BYTES = 1024 * 1024
+
+
+async def TSHandleArchiveBuild(ts_runtime, ts_request):
+    ts_payload = await TSReadJsonObject(ts_request, ts_required=True)
+    ts_asset_ids = TSParseAssetIdList(ts_payload.get("ids", []))
+    if not ts_asset_ids:
+        raise TSWeb.HTTPBadRequest(reason="Expected at least one asset id")
+    if len(ts_asset_ids) > TS_ARCHIVE_MAX_ASSETS:
+        raise TSWeb.HTTPBadRequest(reason="Too many files")
+    TSLogVerbose("route.archive.build", count=len(ts_asset_ids), path=ts_request.path)
+    return TSWeb.json_response(await asyncio.to_thread(ts_runtime.TSBuildAssetArchive, ts_asset_ids))
+
+
+async def TSHandleArchiveDownload(ts_runtime, ts_request):
+    ts_token = str(ts_request.match_info.get("token") or "")
+    ts_entry = ts_runtime.TSGetAssetArchive(ts_token)
+    if ts_entry is None:
+        raise TSWeb.HTTPNotFound()
+    TSLogVerbose("route.archive.download", size_bytes=ts_entry.ts_size_bytes, path=ts_request.path)
+    # Streamed by hand rather than as a FileResponse so the archive can be
+    # deleted the moment the last byte is out: it is a full copy of the
+    # selection and should not hold that disk space for an hour.
+    ts_response = TSWeb.StreamResponse(
+        headers={
+            "Content-Type": "application/zip",
+            "Content-Disposition": f'attachment; filename="{ts_entry.ts_filename}"',
+            "Cache-Control": "no-store",
+        },
+    )
+    ts_response.content_length = ts_entry.ts_size_bytes
+    try:
+        ts_source = await asyncio.to_thread(open, ts_entry.ts_path, "rb")
+    except OSError:
+        raise TSWeb.HTTPNotFound() from None
+    try:
+        await ts_response.prepare(ts_request)
+        while True:
+            ts_chunk = await asyncio.to_thread(ts_source.read, TS_ARCHIVE_STREAM_CHUNK_BYTES)
+            if not ts_chunk:
+                break
+            await ts_response.write(ts_chunk)
+        await ts_response.write_eof()
+    except ConnectionError:
+        # The user cancelled the download. The archive stays until it expires,
+        # so the browser's "retry" still finds it.
+        TSLogVerbose("route.archive.download.interrupted", path=ts_request.path)
+        return ts_response
+    finally:
+        await asyncio.to_thread(ts_source.close)
+    await asyncio.to_thread(ts_runtime.TSReleaseAssetArchive, ts_token)
+    return ts_response
+
+
 async def TSHandleFavorite(ts_runtime, ts_request):
     ts_asset_id = TSParseRouteAssetId(ts_request)
     ts_payload = await TSReadJsonObject(ts_request, ts_required=True)
@@ -328,6 +395,19 @@ async def TSHandleFavorite(ts_runtime, ts_request):
     if ts_asset is None:
         raise TSWeb.HTTPNotFound()
     return TSWeb.json_response({"asset": ts_asset})
+
+
+async def TSHandleReveal(ts_runtime, ts_request):
+    ts_asset_id = TSParseRouteAssetId(ts_request)
+    TSLogVerbose("route.reveal.post", asset_id=ts_asset_id, path=ts_request.path)
+    return TSWeb.json_response(await asyncio.to_thread(ts_runtime.TSRevealAsset, ts_asset_id))
+
+
+async def TSHandleWorkflowReveal(ts_runtime, ts_request):
+    ts_payload = await TSReadJsonObject(ts_request, ts_required=True)
+    ts_relative_path = str(ts_payload.get("path") or "")
+    TSLogVerbose("route.workflow.reveal.post", path=ts_request.path, workflow_path=ts_relative_path)
+    return TSWeb.json_response(await asyncio.to_thread(ts_runtime.TSRevealRequestWorkflowFile, ts_request, ts_relative_path))
 
 
 async def TSHandleSettingsGet(ts_runtime, ts_request):

@@ -1,6 +1,6 @@
 ## About this fork (obvpm)
 
-This is a fork of [AlexYez/comfyui-artius-browser](https://github.com/AlexYez/comfyui-artius-browser) with additional features and tweaks. Everything below is on top of upstream 1.19.0. Upstream's README follows in English only; the other languages are in the upstream repo.
+This is a fork of [AlexYez/comfyui-artius-browser](https://github.com/AlexYez/comfyui-artius-browser) with additional features and tweaks. Everything below is on top of upstream 1.20.1. Upstream's README follows in English only; the other languages are in the upstream repo.
 
 **Browser panel**
 
@@ -13,15 +13,16 @@ This is a fork of [AlexYez/comfyui-artius-browser](https://github.com/AlexYez/co
 - Sort by **Modified** or **Created** instead of a single Date.
 - **Filename pill** on every thumbnail (can be turned off in settings). Landscape thumbnails are centred between the hover bar and the pills.
 - Settings popup behind a gear in the title row, holding Autoscan, Rebuild Cache, Show filenames, **Only show Assets** (hides the Assets / Workflows switch), **Hide 3D** and **Input / Output as a toggle**.
-- **Compare** and **Delete** live in a bar under the grid that appears only when they can be used. Deleting more than one asset asks first.
+- **Compare**, **Download** (upstream's Download Selected: one ZIP) and **Delete** live in a bar under the grid that appears only when they can be used.
+- Confirmations (deleting more than one asset, Rebuild Cache) appear in **ComfyUI's own dialog**, so they also work in ComfyUI Desktop, which does not show the browser's.
 - No outline around the panel on shift-click selection.
 
 **Viewer**
 
 - **Info** button (or the `I` key) hides the information panel so the image or video gets the full width. Remembered.
-- A video plays with the comparison's **play bar** instead of the browser's own controls: Play / Pause, seek bar, time, volume, the frame steps, **Loop** (remembered), the size buttons and **Full Screen** (the video and its bar fill the screen; Esc comes back). A click on the picture or Space plays / pauses. On a narrow player the play / seek / time / volume part gets a line of its own.
+- A video plays with the comparison's **play bar** instead of the browser's own controls: Play / Pause, seek bar, time, volume, upstream's first / last frame buttons, frame steps and **Loop**, the size buttons and **Full Screen** (the video and its bar fill the screen; Esc comes back). A click on the picture or Space plays / pauses. On a narrow player the play / seek / time / volume part gets a line of its own.
 - Video zoom: mouse wheel up zooms in at the cursor, wheel down zooms back out and stops at Fit; drag with the middle mouse button to move around a zoomed video. **1:1**, **Fit** (default) and **Centered** buttons with the zoom shown next to them (1:1 is remembered for the next video), and upstream's `+` `-` `0` `1` keys work too. The play bar stays the same size while zoomed. Needs a Chromium browser (Chrome, Edge); elsewhere the 1:1 button is hidden and there is no zoom.
-- The **volume** (and mute) is remembered: every video, and every comparison, starts at the level you last set in either.
+- The **volume** (and mute) is remembered (upstream's setting): every video, and every comparison, starts at the level you last set in either.
 - **Click the filename** above the image or video to copy it.
 
 **Video comparison**
@@ -31,8 +32,8 @@ This is a fork of [AlexYez/comfyui-artius-browser](https://github.com/AlexYez/co
 - The same zoom for the comparison: every clip zooms and moves together so they always show the same part of the frame, with **Fit** / **1:1** buttons in the controls row (1:1 is exact for the left-most clip, and follows when you drag another one to the front; the others are shown at the same size relative to their own Fit). Works in Side by Side and Split.
 - **Drag a clip's name** to change the order of the clips (Side by Side and Split; playback carries on). A new comparison starts in the grid's order. **Click** a clip's name (without dragging) to copy its file name.
 - Clips with the **same file name** show their folders in front of the name, back to the first folder where they differ (`base/clip_00001.mp4`, `fl2va/clip_00001.mp4`); the tooltip has the full path.
-- Playback and frame-step controls on one row, and a **Loop** option that replays the group when the clips end. The close button sits at the end of that row instead of over the right clip's name.
-- **Volume**: a speaker button (mute) and a slider after the time, for the clip you opened the comparison from (the others are silent, as upstream).
+- Playback and frame-step controls on one row, with upstream's **Loop** after the frame steps. The close button sits at the end of that row instead of over the right clip's name.
+- **Volume**: a speaker button (mute) and a slider after the time, in place of upstream's Mute button, for the clip you opened the comparison from (the others are silent, as upstream).
 - **Full Screen** button next to Fit / 1:1: the clips and the controls row fill the screen. Esc (or the button) comes back to the viewer without closing it.
 
 All fork preferences are kept in the browser's local storage; upstream's settings file is untouched.
@@ -79,15 +80,17 @@ All fork preferences are kept in the browser's local storage; upstream's setting
 | 🗑️ **Safe delete**                  | Sends to system trash via `send2trash` — never hard-delete                                                                      |
 | 🔄 **Autoscan / Rebuild Cache**      | Refresh on demand, or rebuild from scratch                                                                                      |
 | 🏷️ **Version label + update badge** | Current version next to the title; checks GitHub once a day, surfaces a `New version available` chip when a newer release ships |
-| 🧲 **Multi-select drag**             | Drag a whole selection onto the canvas — one native node per asset, auto-arranged in a grid                                     |
-| 🔔 **Action feedback**               | Toast notifications when a copy / delete / load / rescan succeeds or fails — no more silent failures                            |
-| 🌍 **Localized UI**                  | Follows ComfyUI's own language setting — English, Russian, Chinese and Japanese ship today                                      |
-| ♿ **Accessible grid**                | Screen-reader listbox semantics with selection state, plus a keyboard focus ring                                                |
+| 🧲 **Multi-select drag** | Drag a whole selection onto the canvas — one native node per asset, auto-arranged in a grid |
+| 📦 **Download selected** | Select any mix of images, videos, audio and 3D, press `Download Selected` — several files arrive as one ZIP, a single file as itself |
+| 🔔 **Action feedback** | Toast notifications when a copy / delete / load / rescan succeeds or fails — no more silent failures |
+| 🌍 **Localized UI** | Follows ComfyUI's own language setting — English, Russian, Chinese and Japanese ship today |
+| ♿ **Accessible grid** | Screen-reader listbox semantics with selection state, plus a keyboard focus ring |
 
 ### 📁 Supported formats
 
-- 🖼️ Images: `.png` · `.jpg` · `.jpeg` · `.webp` · `.avif`
-- 🎬 Videos: `.mp4` · `.mov` · `.webm` · `.prores`
+- 🖼️ Images: `.png` · `.jpg` · `.jpeg` · `.webp` · `.avif` · `.tif` · `.tiff` · `.exr`
+- 🎬 Videos: `.mp4` · `.mov` · `.webm` · `.prores` · `.mkv` · `.avi` · `.m4v`
+- 🔁 Formats a browser cannot show by itself (ProRes, HEVC, AVI, MKV, EXR, TIFF) play and display in the lightbox through a copy ffmpeg makes on demand; the file itself is never touched
 - 🎵 Audio: `.mp3` · `.wav` · `.flac` · `.opus` · `.ogg`
 - 🎲 3D: `.glb` · `.obj`
 - 📜 Workflows: `.json`
@@ -135,8 +138,9 @@ Then **restart ComfyUI** and **hard refresh** the browser with `Ctrl+F5`.
 |:-------------------------:| ------------------------------------------------------------ |
 | <kbd>Esc</kbd>            | Close                                                        |
 | <kbd>←</kbd> <kbd>→</kbd> | Previous / next asset *(steps frames in video compare mode)* |
-| <kbd>↑</kbd> <kbd>↓</kbd> | Step one video frame                                         |
-| <kbd>Delete</kbd>         | Send to system trash                                         |
+| <kbd>↑</kbd> <kbd>↓</kbd> | Step one video frame |
+| <kbd>Home</kbd> <kbd>End</kbd> | First / last frame of a video (each clip's own, in compare); Loop is off by default, so clips stop on their last frame |
+| <kbd>Delete</kbd> | Send to system trash |
 
 #### Card buttons
 
@@ -186,7 +190,7 @@ When another installed pack publishes a better loader, it wins: a video dropped 
 - 4-image **2×2 grid** compare
 - Separate `Prompt` and `Negative Prompt` panels
 - One-click `Copy Workflow` when the PNG carries it
-- Open in new tab, download, delete
+- Open in new tab, show in folder, download, delete
 
 </details>
 

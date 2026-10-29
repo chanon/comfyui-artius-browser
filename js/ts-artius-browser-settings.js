@@ -75,10 +75,21 @@ export const tsPanelSettings = Object.freeze({
         search: 220,
         realtimeRefresh: 350,
         filterChip: 120,
+        // Typed filter values (width, height, dates): long enough to cover
+        // the gap between keystrokes of one number.
+        filterInput: 450,
     },
+    // A refresh of the same query asks for everything already loaded, so the
+    // user keeps their place; the listing route caps a page at 500.
+    softRefreshMaxItems: 500,
     responseCache: {
         ttlMs: 30000,
         capacity: 10,
+    },
+    // "Download selected": the "packing..." toast waits this long, so a
+    // selection that is packed at once does not flash a message.
+    archive: {
+        preparingToastDelayMs: 700,
     },
     threeDThumbnails: {
         concurrency: 1,
@@ -143,6 +154,32 @@ export const tsViewerSettings = Object.freeze({
         panStep: 60,
         panStepFast: 240,
     },
+    imageSwap: {
+        // Navigating the lightbox rebuilds the stage, so the new <img> starts
+        // empty and the old picture is already gone. Measured on a 1.8 MB
+        // ComfyUI output: 30-60 ms with nothing on screen and a stage collapsed
+        // to zero height. Decoding the file before the swap closes that gap.
+        //
+        // maxWaitMs caps how long a swap waits: past it the stage renders
+        // exactly as it did before this existed, so a slow disk or a huge file
+        // delays the picture but never the navigation.
+        maxWaitMs: 400,
+        // Neighbours warmed after each render, which is what makes the usual
+        // press of the arrow key cost nothing.
+        prefetchRadius: 1,
+        // Decoded copies are what keep the swap instant; an unbounded map of
+        // them is a memory leak in a long browsing session.
+        cacheSize: 8,
+        // Crossfade between two pictures. A hard cut reads as a blink even
+        // when the next file is already decoded; the outgoing picture fades
+        // out over the new one instead. 0 turns it off, and so does the
+        // system's "reduce motion" preference.
+        fadeMs: 220,
+    },
+    // How long a step onto a video, audio or 3D asset waits before building
+    // its player. Key repeat fires every ~30 ms, so a held arrow passes
+    // through without starting a download or a WebGL context per step.
+    mediaSwapSettleMs: 140,
     pagination: {
         prefetchThreshold: 6,
     },

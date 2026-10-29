@@ -4,7 +4,24 @@
 // bar, its native volume and mute) set it, and every video opened after starts
 // at it. In a comparison only the clip it was opened from plays sound
 // (upstream mutes the others), so that is the clip the control drives.
-const TS_FORK_VOLUME_KEY = "tsab.fork.videoVolume";
+// Since 1.20.0 upstream remembers the volume itself (same {volume, muted}
+// shape) and has a plain "Mute" button in the comparison: the setting is
+// upstream's (the fork's old one is carried over once) and that button is
+// hidden behind this speaker + slider.
+const TS_FORK_VOLUME_KEY = "tsArtiusBrowser.lightboxVolume";
+const TS_FORK_OLD_VOLUME_KEY = "tsab.fork.videoVolume";
+
+function tsCarryVolumeSetting() {
+    try {
+        const tsOld = window.localStorage.getItem(TS_FORK_OLD_VOLUME_KEY);
+        if (tsOld !== null && window.localStorage.getItem(TS_FORK_VOLUME_KEY) === null) {
+            window.localStorage.setItem(TS_FORK_VOLUME_KEY, tsOld);
+        }
+        window.localStorage.removeItem(TS_FORK_OLD_VOLUME_KEY);
+    } catch {
+        // private mode: nothing was saved
+    }
+}
 
 const TS_FORK_VOLUME_CSS = `
     /* obvpm fork: video comparison volume */
@@ -33,6 +50,10 @@ const TS_FORK_VOLUME_CSS = `
     }
     /* in the transport, after the time: play | seek | time | volume (upstream
        stacks the transport in one column at 1080 px and below) */
+    /* upstream's text Mute button: this speaker does its job */
+    .ts-video-transport:has(> .ts-fork-volume) > .ts-video-mute {
+        display: none;
+    }
     @media (min-width: 1081px) {
         .ts-viewer .ts-video-compare-shell .ts-video-transport:has(> .ts-fork-volume),
         .ts-viewer .ts-video-shell .ts-video-transport:has(> .ts-fork-volume) {
@@ -96,6 +117,7 @@ export function tsInstallForkVideoVolume(tsPanel) {
         return;
     }
     tsViewer.tsForkVideoVolumeInstalled = true;
+    tsCarryVolumeSetting();
     const tsStyle = document.createElement("style");
     tsStyle.textContent = TS_FORK_VOLUME_CSS;
     tsViewer.shadowRoot.append(tsStyle);
