@@ -30,6 +30,7 @@ TS_ROUTE_DEFINITIONS = (
     ("GET", "/asset_browser/file", "TSHandleFile"),
     ("GET", "/asset_browser/display/{id}", "TSHandleDisplay"),
     ("POST", "/asset_browser/rescan", "TSHandleRescan"),
+    ("GET", "/asset_browser/watcher", "TSHandleWatcherStatus"),               # obvpm fork
     ("POST", "/asset_browser/index_files", "TSHandleIndexFiles"),
     ("POST", "/asset_browser/rebuild_cache", "TSHandleRebuildCache"),
     ("POST", "/asset_browser/delete", "TSHandleDelete"),
@@ -270,6 +271,19 @@ def TSParseRescanScope(ts_value):
     return ts_value
 
 
+def TSParseRescanFolder(ts_value):
+    # obvpm fork: a folder rescan names a folder RELATIVE to its root, forward
+    # slashes, no "." / ".." parts, no drive or leading slash. "" = the root.
+    if ts_value is None:
+        return None
+    if not isinstance(ts_value, str) or len(ts_value) > 1024:
+        raise TSWeb.HTTPBadRequest(reason="Invalid folder")
+    ts_parts = [ts_part for ts_part in ts_value.replace("\\", "/").split("/") if ts_part]
+    if any(ts_part in (".", "..") or ":" in ts_part for ts_part in ts_parts) or ts_value.startswith(("/", "\\")):
+        raise TSWeb.HTTPBadRequest(reason="Invalid folder")
+    return "/".join(ts_parts)
+
+
 def TSParseRescanRootId(ts_value):
     if ts_value is None or ts_value == "":
         return None
@@ -284,9 +298,16 @@ async def TSHandleRescan(ts_runtime, ts_request):
     ts_payload = await TSReadJsonObject(ts_request)
     ts_scope = TSParseRescanScope(ts_payload.get("scope"))
     ts_root_id = TSParseRescanRootId(ts_payload.get("root_id"))
-    TSLogVerbose("route.rescan.request", scope=ts_scope, root_id=ts_root_id, path=ts_request.path)
-    ts_started = await ts_runtime.TSRequestScan(ts_scope=ts_scope, ts_root_id=ts_root_id)
+    # obvpm fork: "folder" (with root_id) rescans that folder only
+    ts_folder = TSParseRescanFolder(ts_payload.get("folder")) if ts_root_id else None
+    TSLogVerbose("route.rescan.request", scope=ts_scope, root_id=ts_root_id, folder=ts_folder, path=ts_request.path)
+    ts_started = await ts_runtime.TSRequestScan(ts_scope=ts_scope, ts_root_id=ts_root_id, ts_folder=ts_folder)
     return TSWeb.json_response({"started": ts_started, "status": ts_runtime.TSGetScanStatus()})
+
+
+async def TSHandleWatcherStatus(ts_runtime, ts_request):
+    # obvpm fork, diagnostics: {"active": every root watched for file changes, "roots": [...]}
+    return TSWeb.json_response(ts_runtime.TSWatcherStatus())
 
 
 def TSParseIndexFileList(ts_value):

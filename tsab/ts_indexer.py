@@ -54,6 +54,11 @@ class TSIndexer:
         self.ts_scan_task: asyncio.Task | None = None
         self.ts_pending_requests: list[dict[str, str | None]] = []
         self.ts_last_progress_bucket = -1
+        # obvpm fork: the folder a folder rescan covers (None = whole roots), in
+        # the status the panel gets, and when the last progress event went out
+        # (progress is also sent on time, not only every N files).
+        self.ts_status_folder: str | None = None
+        self.ts_last_progress_event_time = 0.0
         self.ts_status = TSScanStatus(
             ts_running=False,
             ts_phase="idle",
@@ -71,7 +76,9 @@ class TSIndexer:
         )
 
     def TSGetStatus(self) -> dict[str, Any]:
-        return self.ts_status.TSAsDict()
+        ts_status = self.ts_status.TSAsDict()
+        ts_status["folder"] = self.ts_status_folder        # obvpm fork
+        return ts_status
 
     async def TSRunExclusiveMaintenance(self, ts_maintenance_callable) -> bool:
         # Runs a blocking maintenance action (cache rebuild reset) while
@@ -86,20 +93,32 @@ class TSIndexer:
             await asyncio.to_thread(ts_maintenance_callable)
             return True
 
-    async def TSStartBackgroundScan(self, ts_scope: str | None = None, ts_root_id: str | None = None) -> bool:
+    async def TSStartBackgroundScan(
+        self, ts_scope: str | None = None, ts_root_id: str | None = None, ts_folder: str | None = None
+    ) -> bool:
         async with self.ts_async_lock:
             if self.ts_scan_task is not None and not self.ts_scan_task.done():
                 # Keep every distinct queued request: a single pending slot
                 # silently dropped an earlier "rescan root A" when "rescan
                 # root B" arrived while a scan was running.
-                self._TSQueuePendingRequest(ts_scope, ts_root_id)
+                self._TSQueuePendingRequest(ts_scope, ts_root_id, ts_folder)
                 return False
-            self.ts_scan_task = asyncio.create_task(self._TSRunScanAsync(ts_scope, ts_root_id))
+            self.ts_scan_task = asyncio.create_task(self._TSRunScanAsync(ts_scope, ts_root_id, ts_folder))
             TSLogVerbose("indexer.scan.started_async", scope=ts_scope, root_id=ts_root_id)
             return True
 
-    def _TSQueuePendingRequest(self, ts_scope: str | None, ts_root_id: str | None) -> None:
+    def _TSQueuePendingRequest(self, ts_scope: str | None, ts_root_id: str | None, ts_folder: str | None = None) -> None:
         ts_request = {"scope": ts_scope, "root_id": ts_root_id}
+        if ts_folder is not None:
+            # obvpm fork: a folder rescan is covered by a queued scan of its
+            # whole root (or of everything), and is never queued twice.
+            if any(
+                (ts_pending.get("scope") is None and ts_pending.get("root_id") is None)
+                or (ts_pending.get("root_id") == ts_root_id and ts_pending.get("folder") is None)
+                for ts_pending in self.ts_pending_requests
+            ):
+                return
+            ts_request["folder"] = ts_folder
         if ts_request in self.ts_pending_requests:
             TSLogVerbose("indexer.scan.queue.duplicate", scope=ts_scope, root_id=ts_root_id)
             return
@@ -136,13 +155,15 @@ class TSIndexer:
         self.ts_pending_requests.append(ts_request)
         TSLogVerbose("indexer.scan.queued", scope=ts_scope, root_id=ts_root_id)
 
-    async def _TSRunScanAsync(self, ts_scope: str | None, ts_root_id: str | None) -> None:
-        await asyncio.to_thread(self.TSRunScanSync, ts_scope, ts_root_id)
+    async def _TSRunScanAsync(self, ts_scope: str | None, ts_root_id: str | None, ts_folder: str | None = None) -> None:
+        await asyncio.to_thread(self.TSRunScanSync, ts_scope, ts_root_id, ts_folder)
         async with self.ts_async_lock:
             if self.ts_pending_requests:
                 ts_pending = self.ts_pending_requests.pop(0)
                 TSLogVerbose("indexer.scan.dequeued", scope=ts_pending.get("scope"), root_id=ts_pending.get("root_id"))
-                self.ts_scan_task = asyncio.create_task(self._TSRunScanAsync(ts_pending.get("scope"), ts_pending.get("root_id")))
+                self.ts_scan_task = asyncio.create_task(
+                    self._TSRunScanAsync(ts_pending.get("scope"), ts_pending.get("root_id"), ts_pending.get("folder"))
+                )
             else:
                 self.ts_scan_task = None
 
@@ -240,9 +261,13 @@ class TSIndexer:
             TSJsonLoads(ts_existing_row["metadata"], {}),
         )
 
-    def TSRunScanSync(self, ts_scope: str | None = None, ts_root_id: str | None = None) -> None:
+    def TSRunScanSync(self, ts_scope: str | None = None, ts_root_id: str | None = None, ts_folder: str | None = None) -> None:
+        # obvpm fork: ts_folder (with ts_root_id) = rescan only that folder's
+        # subtree: new / changed files indexed, rows of files gone from it
+        # removed, nothing outside it touched.
         with self.ts_thread_lock:
             self.ts_last_progress_bucket = -1
+            self.ts_status_folder = ts_folder if (ts_folder is not None and ts_root_id) else None
             self.ts_status = TSScanStatus(
                 ts_running=True,
                 ts_phase="walk",
@@ -308,9 +333,21 @@ class TSIndexer:
                 ts_incomplete_root_ids: set[str] = set()
                 self._TSEmitScanProgress(force_event=True, force_log=True)
 
+                # obvpm fork: the folder rescan's start directory and the path
+                # prefix its stale-row prune is limited to.
+                ts_folder_start = None
+                ts_folder_prefix = None
+                if self.ts_status_folder is not None and len(ts_roots) == 1:
+                    ts_folder_start = (ts_roots[0].ts_path.resolve() / self.ts_status_folder).resolve()
+                    if not ts_folder_start.is_dir():
+                        ts_folder_start = None
+                        ts_roots = []
+                    else:
+                        ts_folder_prefix = TSNormalizeResolvedPathString(ts_folder_start).rstrip("/") + "/"
+
                 for ts_root in ts_roots:
                     ts_failed_directories: list[str] = []
-                    for ts_asset_stat_batch in self._TSIterAssetStatBatches(ts_root, 500, ts_failed_directories):
+                    for ts_asset_stat_batch in self._TSIterAssetStatBatches(ts_root, 500, ts_failed_directories, ts_folder_start):
                         # The walk hands out RESOLVED paths already, so the
                         # key is built without resolving each file again - and
                         # once per file, not once for the query and again in
@@ -342,7 +379,10 @@ class TSIndexer:
                                         self.ts_preview_cache.TSPurgePreview(ts_existing_preview_path)
                                 ts_discovered_payloads.append(ts_discovered_payload)
                             ts_pending_candidates.append((ts_asset_stat, ts_normalized_path, ts_existing_row, ts_stat_changed))
-                            if self.ts_status.ts_scanned % max(1, TS_PROGRESS_EVENT_FILE_STEP) == 0:
+                            if (
+                                self.ts_status.ts_scanned % max(1, TS_PROGRESS_EVENT_FILE_STEP) == 0
+                                or time.monotonic() - self.ts_last_progress_event_time >= 0.5    # obvpm fork
+                            ):
                                 self._TSEmitScanProgress()
 
                         ts_catalog_rows_by_path: dict[str, Any] = {}
@@ -352,12 +392,18 @@ class TSIndexer:
 
                         for ts_asset_stat, ts_normalized_path, ts_existing_row, ts_stat_changed in ts_pending_candidates:
                             ts_effective_row = ts_catalog_rows_by_path.get(ts_normalized_path, ts_existing_row)
+                            # obvpm fork: a missing preview or metadata only
+                            # counts while the file was never processed. A
+                            # processed file whose thumbnail could not be made
+                            # (an empty placeholder mp4, a clip ffmpeg cannot
+                            # read) was retried on EVERY scan -- 45 such files
+                            # held each rescan at "Indexing changed assets 0 / 45".
+                            # It is retried when it changes, or by Rebuild Cache.
+                            ts_never_processed = ts_effective_row is not None and not bool(ts_effective_row["is_indexed"])
                             ts_needs_index = (
                                 ts_stat_changed
                                 or ts_effective_row is None
-                                or not bool(ts_effective_row["is_indexed"])
-                                or not bool(ts_effective_row["has_preview"])
-                                or not bool(ts_effective_row["has_metadata"])
+                                or ts_never_processed
                                 # An unchanged file whose STORED prompt/workflow
                                 # blob predates the current extraction rules. It
                                 # is what lets a plain Rescan backfill a library
@@ -397,6 +443,9 @@ class TSIndexer:
                     self.ts_database.TSGetRootAssetRefs(ts_prunable_root_ids) if ts_prunable_root_ids else []
                 )
                 ts_deleted_rows = [ts_row for ts_row in ts_root_asset_refs if str(ts_row["path"]) not in ts_seen_paths]
+                if ts_folder_prefix is not None:
+                    # obvpm fork: a folder rescan saw only its folder
+                    ts_deleted_rows = [ts_row for ts_row in ts_deleted_rows if str(ts_row["path"]).startswith(ts_folder_prefix)]
                 self.ts_status.ts_deleted = len(ts_deleted_rows)
                 if ts_deleted_rows:
                     for ts_row in ts_deleted_rows:
@@ -450,6 +499,9 @@ class TSIndexer:
                             if (
                                 self.ts_status.ts_processed_candidates % max(1, TS_PROGRESS_EVENT_CANDIDATE_STEP) == 0
                                 or self.ts_status.ts_processed_candidates >= self.ts_status.ts_total_candidates
+                                # obvpm fork: a few slow files (videos) showed
+                                # "0 / 45" until all 45 were done
+                                or time.monotonic() - self.ts_last_progress_event_time >= 0.5
                             ):
                                 self._TSEmitScanProgress()
                             ts_next_candidate = next(ts_candidate_iterator, None)
@@ -519,9 +571,10 @@ class TSIndexer:
         ts_root: TSRootDefinition,
         ts_batch_size: int,
         ts_failed_directories: list[str] | None = None,
+        ts_start_directory=None,
     ) -> Iterable[list[TSAssetStat]]:
         ts_batch: list[TSAssetStat] = []
-        for ts_asset_stat in self._TSIterAssetStats(ts_root, ts_failed_directories):
+        for ts_asset_stat in self._TSIterAssetStats(ts_root, ts_failed_directories, ts_start_directory):
             ts_batch.append(ts_asset_stat)
             if len(ts_batch) >= max(1, int(ts_batch_size)):
                 yield ts_batch
@@ -533,6 +586,7 @@ class TSIndexer:
         self.ts_status.ts_progress_percent = TSComputeProgressPercent(self.ts_status)
         self.ts_status.ts_progress_message = TSBuildProgressMessage(self.ts_status)
         if force_event or self.ts_status.ts_running:
+            self.ts_last_progress_event_time = time.monotonic()      # obvpm fork
             self.ts_emit_callback(
                 TS_EVENT_INDEX_PROGRESS,
                 {
@@ -544,7 +598,10 @@ class TSIndexer:
         ts_bucket = int(self.ts_status.ts_progress_percent // ts_step)
         if force_log or ts_bucket > self.ts_last_progress_bucket:
             self.ts_last_progress_bucket = ts_bucket
-            TSLogProgress(
+            # obvpm fork: the progress lines ("TS asset scan progress: [####]
+            # 100% | Scan complete") filled ComfyUI's console on every rescan;
+            # now only with the browser's verbose logging on.
+            TSLogInfoIfVerbose(
                 "TS asset scan progress: [%s] %3d%% | %s",
                 TSBuildConsoleProgressBar(self.ts_status.ts_progress_percent),
                 round(self.ts_status.ts_progress_percent),
@@ -555,9 +612,10 @@ class TSIndexer:
         self,
         ts_root: TSRootDefinition,
         ts_failed_directories: list[str] | None = None,
+        ts_start_directory=None,
     ) -> Iterable[TSAssetStat]:
         ts_ignored_paths = {ts_path.resolve() for ts_path in self.ts_storage_paths.TSIgnorePathsForRoot(ts_root)}
-        return TSIterAssetStats(ts_root, ts_ignored_paths, ts_failed_directories)
+        return TSIterAssetStats(ts_root, ts_ignored_paths, ts_failed_directories, ts_start_directory)
 
     def _TSProcessCandidateTuple(
         self,

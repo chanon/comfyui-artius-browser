@@ -17,6 +17,7 @@ from .ts_config import TSConfigStore
 from .ts_db import TSDatabase
 from .ts_db_schema import TS_DB_SCHEMA_VERSION
 from .ts_delete import TSDeleteService
+from .ts_fork_watcher import TSForkFolderWatcher
 from .ts_display_proxy import (
     TS_DISPLAY_MODE_PROXY,
     TS_DISPLAY_PROXY_CONTENT_TYPES,
@@ -101,6 +102,16 @@ class TSAssetBrowserRuntime:
             ts_scan_service=self.ts_scan_service,
             ts_get_roots=self.TSGetRoots,
             ts_ensure_metadata=self._TSEnsureMetadata,
+        )
+        # obvpm fork: Windows reports file changes under each root; settled
+        # folders get a folder rescan; the panel only listens, it never polls
+        self.ts_fork_watcher = TSForkFolderWatcher(
+            ts_get_roots=lambda: self.ts_storage_paths.TSBuildBaseRoots(self.ts_config_store.TSLoadConfig()),
+            ts_ignore_paths_for_root=self.ts_storage_paths.TSIgnorePathsForRoot,
+            ts_supported_extensions=lambda: set(self.ts_handler_registry.ts_extension_map),
+            ts_is_autoscan_enabled=self.TSIsAutoscanEnabled,
+            ts_request_scan=self.TSRequestScan,
+            ts_get_loop=lambda: getattr(self.ts_scan_service.ts_get_prompt_server(), "loop", None),
         )
         self.ts_bootstrapped = False
         # Per-asset locks are reference-counted and reclaimed once released so
@@ -213,6 +224,10 @@ class TSAssetBrowserRuntime:
         except Exception:
             TSLogger.exception("Failed to register Timesaver Artius Browser routes")
         self.TSStart()
+        try:
+            self.ts_fork_watcher.TSStart()      # obvpm fork
+        except Exception:
+            TSLogger.exception("Artius Browser (obvpm fork): could not start the folder watcher")
 
     def TSStart(self) -> None:
         self.ts_scan_service.TSStart()
@@ -230,8 +245,15 @@ class TSAssetBrowserRuntime:
         except Exception:
             TSLogger.debug("Failed to emit event %s", ts_event_name, exc_info=True)
 
-    async def TSRequestScan(self, ts_scope: str | None = None, ts_root_id: str | None = None) -> bool:
-        return await self.ts_scan_service.TSRequestScan(ts_scope=ts_scope, ts_root_id=ts_root_id)
+    async def TSRequestScan(
+        self, ts_scope: str | None = None, ts_root_id: str | None = None, ts_folder: str | None = None
+    ) -> bool:
+        # obvpm fork: ts_folder = rescan one folder of ts_root_id
+        return await self.ts_scan_service.TSRequestScan(ts_scope=ts_scope, ts_root_id=ts_root_id, ts_folder=ts_folder)
+
+    def TSWatcherStatus(self) -> dict[str, Any]:
+        # obvpm fork: which roots are watched for file changes (diagnostics)
+        return self.ts_fork_watcher.TSStatus()
 
     def TSIndexFiles(self, ts_root_id: str, ts_relative_paths: list[str]) -> dict[str, Any]:
         # The targeted counterpart of TSRequestScan: index exactly the files the

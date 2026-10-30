@@ -59,9 +59,11 @@ class TSScanService:
         except Exception:
             TSLogger.exception("Failed to start Timesaver Artius Browser background scan")
 
-    async def TSRequestScan(self, ts_scope: str | None = None, ts_root_id: str | None = None) -> bool:
-        TSLogVerbose("runtime.scan.requested", scope=ts_scope, root_id=ts_root_id)
-        return await self.ts_indexer.TSStartBackgroundScan(ts_scope=ts_scope, ts_root_id=ts_root_id)
+    async def TSRequestScan(
+        self, ts_scope: str | None = None, ts_root_id: str | None = None, ts_folder: str | None = None
+    ) -> bool:
+        TSLogVerbose("runtime.scan.requested", scope=ts_scope, root_id=ts_root_id, folder=ts_folder)
+        return await self.ts_indexer.TSStartBackgroundScan(ts_scope=ts_scope, ts_root_id=ts_root_id, ts_folder=ts_folder)
 
     def TSIndexFiles(self, ts_root_id: str, ts_relative_paths: list[str]) -> dict[str, Any]:
         TSLogVerbose("runtime.index_files.requested", root_id=ts_root_id, count=len(ts_relative_paths))

@@ -242,6 +242,11 @@ class TSPreviewCache:
             ts_success = ts_tools.TSExtractVideoFrame(
                 ts_source_path, ts_temp_path, ts_frame_time, ts_max_output_dim=ts_max_output_dim
             )
+            if not ts_success and ts_frame_time > 0:
+                # obvpm fork: a clip shorter than the poster time (a 5-frame
+                # still) has no frame there -- take its first frame instead
+                self._TSDiscardTempSource(ts_temp_path)
+                ts_success = ts_tools.TSExtractVideoFrame(ts_source_path, ts_temp_path, 0.0, ts_max_output_dim=ts_max_output_dim)
             if not ts_success:
                 self._TSDiscardTempSource(ts_temp_path)
                 return self.TSGetTypePlaceholderPreview("video")
@@ -269,6 +274,12 @@ class TSPreviewCache:
             ts_probe, ts_frame_success = ts_tools.TSRunFFProbeAndExtractFrameParallel(
                 ts_source_path, ts_temp_path, ts_frame_time, ts_max_output_dim=ts_max_output_dim
             )
+            if not ts_frame_success and ts_frame_time > 0:
+                # obvpm fork: first frame of a clip shorter than the poster time
+                self._TSDiscardTempSource(ts_temp_path)
+                ts_frame_success = ts_tools.TSExtractVideoFrame(
+                    ts_source_path, ts_temp_path, 0.0, ts_max_output_dim=ts_max_output_dim
+                )
             if not ts_frame_success:
                 self._TSDiscardTempSource(ts_temp_path)
                 return ts_probe, self.TSGetTypePlaceholderPreview("video")

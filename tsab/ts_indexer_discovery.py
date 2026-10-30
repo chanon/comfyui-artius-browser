@@ -181,6 +181,7 @@ def TSIterAssetStats(
     ts_root: TSRootDefinition,
     ts_ignored_paths: set[Path],
     ts_failed_directories: list[str] | None = None,
+    ts_start_directory: Path | None = None,
 ) -> Iterable[TSAssetStat]:
     ts_resolved_root = ts_root.ts_path.resolve()
     # The walk starts from the RESOLVED root and TSScanDirectory resolves every
@@ -188,7 +189,9 @@ def TSIterAssetStats(
     # is the resolved path of a regular file. Resolving it once more cost a
     # system call per file (on Windows an open handle): 560 ms of a 580 ms
     # walk over 6.9k files. Only a symlinked FILE can still point elsewhere.
-    ts_directory_stack = [ts_resolved_root]
+    # obvpm fork: a folder rescan walks only that folder's subtree; paths stay
+    # relative to the ROOT (same prefix), so its rows are the same rows.
+    ts_directory_stack = [ts_start_directory if ts_start_directory is not None else ts_resolved_root]
     # Relative paths by string slicing, for the same reason: every entry of a
     # walk from the resolved root starts with this prefix, and pathlib's
     # relative_to/suffix/parent were most of what was left of the walk time.

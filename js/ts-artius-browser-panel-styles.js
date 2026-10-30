@@ -1565,4 +1565,22 @@ export const tsPanelStyles = `<style>
                     flex: 1 1 160px;
                     min-width: 120px;
                 }
+
+                /* ---- obvpm fork: scan progress as an overlay ----------------
+                   The bar floats over the bottom of the grid (moved there by
+                   fork-auto-rescan.js) instead of taking a row under the
+                   toolbar, so a scan never pushes the toolbar or the grid. */
+                .ts-gallery-wrap > .ts-progress.ts-fork-progress-dock {
+                    position: absolute;
+                    left: 10px;
+                    right: 10px;
+                    bottom: 10px;
+                    z-index: 6;
+                    padding: 7px 10px 6px;
+                    border: 1px solid var(--ts-border);
+                    border-radius: 8px;
+                    background: color-mix(in srgb, var(--ts-bg-1) 92%, transparent);
+                    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+                    pointer-events: none;
+                }
             </style>`;
