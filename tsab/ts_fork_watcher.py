@@ -5,11 +5,16 @@ One thread per asset root asks Windows to report changes anywhere under it
 no extra package). The thread sleeps inside that call until something changes.
 
 Changes are collected per folder and handed to the existing folder rescan
-(TSRequestScan with ts_folder) once that folder has been quiet for
-TS_WATCH_QUIET_S: a file that is still being written keeps resetting the
-timer, so a render is indexed once, when it is finished. A folder written to
-non-stop is still rescanned every TS_WATCH_MAX_WAIT_S. The folder rescan only
-processes new or changed files and only removes rows inside that folder.
+(TSRequestScan with ts_folder) once that folder has settled: no change reported
+for TS_WATCH_QUIET_S AND every changed file the same size and modified time
+for that long. The second check is needed because Windows reports a growing
+file's size only as its write cache is flushed, so a render still being written
+can look quiet for seconds; asking the file itself gives its real size. So a
+render is indexed once, when it is finished. A folder with other files changing
+non-stop is still rescanned after TS_WATCH_MAX_WAIT_S once its files hold
+still, and a file that never stops growing after TS_WATCH_GROW_CAP_S. The
+folder rescan only processes new or changed files and only removes rows inside
+that folder.
 
 Ignored: the browser's own folder (thumbnails, database -- indexing must not
 trigger itself), files the browser does not show (.json, .cond, .safetensors,
@@ -37,7 +42,8 @@ from .ts_logging import TSLogInfoIfVerbose, TSLogVerbose
 TSLogger = logging.getLogger("TSArtiusBrowser")
 
 TS_WATCH_QUIET_S = 1.5          # a folder must be quiet this long before it is rescanned
-TS_WATCH_MAX_WAIT_S = 10.0      # ... unless it has been changing for this long
+TS_WATCH_MAX_WAIT_S = 10.0      # ... unless it has been changing for this long (its files holding still)
+TS_WATCH_GROW_CAP_S = 120.0     # a file still growing after this long is indexed anyway
 TS_WATCH_TICK_S = 0.25
 TS_WATCH_RESYNC_S = 30.0
 TS_WATCH_MAX_FOLDERS = 8        # more folders ready at once in one root -> one scan of the root
@@ -173,7 +179,9 @@ class TSForkFolderWatcher:
         self.ts_root_paths: dict[str, Path] = {}
         self.ts_ignored: dict[str, list[str]] = {}       # root id -> ignored folders, relative posix
         self.ts_extensions: set[str] = set()
-        self.ts_dirty: dict[tuple[str, str], list[float]] = {}     # (root, folder) -> [first, last change]
+        # (root, folder) -> {"first": first change, "last": last change reported, "grew": last time a
+        # file was found still changing, "files": {path: (size, mtime) or None}}
+        self.ts_dirty: dict[tuple[str, str], dict[str, Any]] = {}
         self.ts_started = False
 
     def TSIsActive(self) -> bool:
@@ -231,7 +239,7 @@ class TSForkFolderWatcher:
     # ---- one change reported by a root's thread ----
     def _TSOnChange(self, ts_root_id: str, ts_relative: str | None, ts_action: int) -> None:
         if ts_relative is None:
-            self._TSMarkDirty(ts_root_id, "")
+            self._TSMarkDirty(ts_root_id, "", None)
             return
         for ts_ignored in self.ts_ignored.get(ts_root_id, ()):
             if ts_relative == ts_ignored or ts_relative.startswith(ts_ignored + "/"):
@@ -239,7 +247,8 @@ class TSForkFolderWatcher:
         ts_pure = PurePosixPath(ts_relative)
         ts_parent = "" if str(ts_pure.parent) == "." else ts_pure.parent.as_posix()
         if ts_pure.suffix.lower() in self.ts_extensions:
-            self._TSMarkDirty(ts_root_id, ts_parent)
+            ts_root_path = self.ts_root_paths.get(ts_root_id)
+            self._TSMarkDirty(ts_root_id, ts_parent, None if ts_root_path is None else ts_root_path / ts_relative)
             return
         # not a file the browser shows -- but it may be a folder that was
         # created or renamed (its files arrive with it); a folder's own
@@ -247,16 +256,24 @@ class TSForkFolderWatcher:
         if ts_action in (_FILE_ACTION_ADDED, _FILE_ACTION_RENAMED_NEW_NAME):
             ts_root_path = self.ts_root_paths.get(ts_root_id)
             if ts_root_path is not None and (ts_root_path / ts_relative).is_dir():
-                self._TSMarkDirty(ts_root_id, ts_parent)
+                self._TSMarkDirty(ts_root_id, ts_parent, None)
 
-    def _TSMarkDirty(self, ts_root_id: str, ts_folder: str) -> None:
+    @staticmethod
+    def _TSFileState(ts_path: Path):
+        try:
+            ts_stat = ts_path.stat()
+        except OSError:
+            return None                  # deleted (or not there yet)
+        return (ts_stat.st_size, ts_stat.st_mtime_ns)
+
+    def _TSMarkDirty(self, ts_root_id: str, ts_folder: str, ts_path: Path | None) -> None:
         ts_now = time.monotonic()
+        ts_state = self._TSFileState(ts_path) if ts_path is not None else None
         with self.ts_lock:
-            ts_entry = self.ts_dirty.get((ts_root_id, ts_folder))
-            if ts_entry is None:
-                self.ts_dirty[(ts_root_id, ts_folder)] = [ts_now, ts_now]
-            else:
-                ts_entry[1] = ts_now
+            ts_entry = self.ts_dirty.setdefault((ts_root_id, ts_folder), {"first": ts_now, "last": ts_now, "grew": 0.0, "files": {}})
+            ts_entry["last"] = ts_now
+            if ts_path is not None:
+                ts_entry["files"][ts_path] = ts_state
 
     # ---- the debounce: rescan a folder once it has settled ----
     def _TSDispatchLoop(self) -> None:
@@ -268,12 +285,30 @@ class TSForkFolderWatcher:
                 ts_next_resync = ts_now + TS_WATCH_RESYNC_S
                 self._TSResync()
             with self.ts_lock:
-                ts_ready = [
-                    ts_key for ts_key, (ts_first, ts_last) in self.ts_dirty.items()
-                    if ts_now - ts_last >= TS_WATCH_QUIET_S or ts_now - ts_first >= TS_WATCH_MAX_WAIT_S
+                ts_due = [
+                    (ts_key, ts_entry["last"], dict(ts_entry["files"]))
+                    for ts_key, ts_entry in self.ts_dirty.items()
+                    if (ts_now - ts_entry["last"] >= TS_WATCH_QUIET_S or ts_now - ts_entry["first"] >= TS_WATCH_MAX_WAIT_S)
+                    and ts_now - ts_entry["grew"] >= TS_WATCH_QUIET_S
                 ]
-                for ts_key in ts_ready:
+            ts_ready = []
+            for ts_key, ts_last_seen, ts_files in ts_due:
+                # ask each changed file for its real size / modified time
+                # (outside the lock: it touches the disk)
+                ts_current = {ts_path: self._TSFileState(ts_path) for ts_path in ts_files}
+                with self.ts_lock:
+                    ts_entry = self.ts_dirty.get(ts_key)
+                    if ts_entry is None:
+                        continue
+                    if ts_entry["last"] != ts_last_seen and ts_now - ts_entry["first"] < TS_WATCH_MAX_WAIT_S:
+                        continue             # more changes came in meanwhile: wait again
+                    if ts_current != ts_files and ts_now - ts_entry["first"] < TS_WATCH_GROW_CAP_S:
+                        # still being written: remember what it is now, wait for it to hold still
+                        ts_entry["files"].update(ts_current)
+                        ts_entry["grew"] = ts_now
+                        continue
                     self.ts_dirty.pop(ts_key, None)
+                    ts_ready.append(ts_key)
             if ts_ready:
                 try:
                     self._TSDispatch(ts_ready)
