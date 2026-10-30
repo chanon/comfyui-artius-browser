@@ -2732,8 +2732,19 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         // must never hold the group hostage: it counts as ready and is left
         // parked on its last frame.
         const tsIsSettled = (tsVideo) => Boolean(tsVideo.error) || tsVideo.ended || tsIsAtEnd(tsVideo);
+        // obvpm fork: a clip with less than tsResumeBufferSeconds left (a very
+        // short clip, or one paused near its end) is ready once it is buffered
+        // to its end -- it could never be 0.25 s ahead, and the group waited
+        // in "Syncing clips..." for it forever.
+        const tsNeededAhead = (tsVideo) => {
+            const tsDuration = Number(tsVideo.duration || 0);
+            if (!Number.isFinite(tsDuration) || tsDuration <= 0) {
+                return tsResumeBufferSeconds;
+            }
+            return Math.min(tsResumeBufferSeconds, Math.max(0, tsDuration - Number(tsVideo.currentTime || 0) - 0.01));
+        };
         const tsIsVideoReady = (tsVideo) => tsIsSettled(tsVideo)
-            || (tsVideo.readyState >= 3 && tsBufferedAhead(tsVideo) >= tsResumeBufferSeconds);
+            || (tsVideo.readyState >= 3 && tsBufferedAhead(tsVideo) >= tsNeededAhead(tsVideo));
         // A clip in the middle of a seek reports readyState 2 for a frame or
         // two. Counting that as a stall makes the group hold, re-align, seek
         // again and hold again — an infinite loop that looks exactly like the
