@@ -1583,4 +1583,38 @@ export const tsPanelStyles = `<style>
                     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
                     pointer-events: none;
                 }
+
+                /* ---- obvpm fork: tree over the grid, in a narrow panel ------
+                   Upstream stacks the two in rows it leaves to size themselves,
+                   and two auto rows share the spare height: the grid's row got
+                   half of it, and the tree's row the other half, as an empty gap
+                   under its 200px cap. Here the tree's row is only as tall as
+                   the tree, up to the height dragged, and the grid has the rest.
+                   Upstream's width handle is the line between them, dragged by
+                   fork-tree-height.js, which reads --ts-fork-stacked. */
+                @container ts-shell (max-width: 460px) {
+                    .ts-body {
+                        --ts-fork-stacked: 1;
+                    }
+
+                    .ts-body:not([data-mode="flat"]) {
+                        grid-template-rows: fit-content(min(var(--ts-fork-tree-height, 221px), calc(100% - 124px))) 4px minmax(0, 1fr);
+                    }
+
+                    .ts-tree-panel {
+                        max-height: none;
+                    }
+
+                    .ts-body:not([data-mode="flat"]) .ts-tree-resizer {
+                        display: block;
+                        cursor: row-resize;
+                    }
+
+                    .ts-tree-resizer::after {
+                        top: -3px;
+                        bottom: -3px;
+                        left: 0;
+                        right: 0;
+                    }
+                }
             </style>`;

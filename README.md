@@ -19,6 +19,7 @@ This is a fork of [AlexYez/comfyui-artius-browser](https://github.com/AlexYez/co
 - **New files show up by themselves**: the server watches the asset folders for file changes (Windows; no polling) and rescans a folder once it has been quiet for 1.5 s, so a render still being written is picked up once, when it is done. Clicking a folder rescans just that folder. Both follow the Autoscan setting. A rescan that finds nothing changes nothing on screen. Not on Windows, new files show up after a generation, a folder click or Rescan.
 - **Faster rescans**: a file whose thumbnail could not be made (an empty or unreadable video) is no longer processed again on every scan, which held each rescan at "Indexing changed assets 0 / N"; clips shorter than half a second get their first frame as the thumbnail; the progress count updates while it runs.
 - The scan **progress bar floats over the bottom of the grid** instead of pushing the toolbar down.
+- In a narrow panel the thumbnails start right under the folder tree, and the **line between them can be dragged** to make the tree taller or shorter. Remembered.
 
 **Viewer**
 
