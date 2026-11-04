@@ -26,12 +26,13 @@ import { tsInstallForkModeSelect } from "./ts-artius-browser-fork-mode-select.js
 import { tsInstallForkNarrowToolbar } from "./ts-artius-browser-fork-narrow-toolbar.js";
 import { tsInstallForkAutoRescan } from "./ts-artius-browser-fork-auto-rescan.js";
 import { tsInstallForkTreeHeight } from "./ts-artius-browser-fork-tree-height.js";
+import { tsInstallForkKeepSelection } from "./ts-artius-browser-fork-keep-selection.js";
 
 export function tsInstallFork(tsPanel) {
     for (const tsInstall of [tsInstallForkToolbar, tsInstallForkNarrowToolbar, tsInstallForkModeSelect, tsInstallForkRecurse, tsInstallForkSettings, tsInstallForkSelectionBar, tsInstallForkConfirm,
         tsInstallForkAssetsOnly, tsInstallForkHide3D, tsInstallForkRootToggle, tsInstallForkRootMemory,
         tsInstallForkViewerInfo, tsInstallForkVideoSize, tsInstallForkCompareNames, tsInstallForkVideoCompare, tsInstallForkVideoBar, tsInstallForkVideoZoom, tsInstallForkVideoVolume, tsInstallForkVideoFullscreen, tsInstallForkCopyName,
-        tsInstallForkCardNames, tsInstallForkCardAlign, tsInstallForkSortDates, tsInstallForkAutoRescan, tsInstallForkTreeHeight]) {
+        tsInstallForkCardNames, tsInstallForkCardAlign, tsInstallForkSortDates, tsInstallForkAutoRescan, tsInstallForkTreeHeight, tsInstallForkKeepSelection]) {
         try {
             tsInstall(tsPanel);
         } catch (tsError) {

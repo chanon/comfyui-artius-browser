@@ -46,9 +46,20 @@ export function tsInstallForkConfirm(tsPanel) {
     const tsDeleteAssets = tsPanel.tsDeleteAssets;
     if (typeof tsDeleteAssets === "function") {
         tsPanel.tsDeleteAssets = async function (tsAssets, ...tsRest) {
-            const tsCount = (Array.isArray(tsAssets) ? tsAssets : []).filter((tsAsset) => tsAsset?.allow_delete).length;
-            if (tsCount > 1) {
-                const tsMessage = tsT("confirm.deleteAssets", "Move {count} files to the trash?").replace("{count}", String(tsCount));
+            const tsDeletable = (Array.isArray(tsAssets) ? tsAssets : []).filter((tsAsset) => tsAsset?.allow_delete);
+            const tsCount = tsDeletable.length;
+            // selected, but a search took it off the list: never gone unseen,
+            // even alone, where a single delete otherwise goes at once
+            const tsHeldIds = new Set((this.tsRefs?.tsForkHeldSelection?.() || []).map((tsItem) => tsItem.id));
+            const tsUnseen = tsDeletable.filter((tsAsset) => tsHeldIds.has(tsAsset.id)).map((tsAsset) => tsAsset.filename);
+            if (tsCount > 1 || tsUnseen.length > 0) {
+                let tsMessage = tsCount > 1
+                    ? tsT("confirm.deleteAssets", "Move {count} files to the trash?").replace("{count}", String(tsCount))
+                    : tsT("fork.confirm.deleteOne", "Move this file to the trash?");
+                if (tsUnseen.length > 0) {
+                    tsMessage += " " + tsT("fork.confirm.deleteUnseen", "Not in the list on screen: {names}")
+                        .replace("{names}", tsUnseen.join(", "));
+                }
                 if (!(await tsAsk(tsTitle(), tsMessage, "delete"))) {
                     return undefined;
                 }

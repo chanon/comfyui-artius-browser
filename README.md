@@ -13,6 +13,7 @@ This is a fork of [AlexYez/comfyui-artius-browser](https://github.com/AlexYez/co
 - Sort by **Modified** or **Created** instead of a single Date.
 - **Filename pill** on every thumbnail (can be turned off in settings). Landscape thumbnails are centred between the hover bar and the pills.
 - Settings popup behind a gear in the title row, holding Autoscan, Rebuild Cache, Show filenames, **Only show Assets** (hides the Assets / Workflows switch), **Hide 3D** and **Input / Output as a toggle**.
+- A new **search keeps what is selected**: search a clip and click it, search another and Ctrl-click it, then Compare. The first clip picked comes first. The bar says how many selected clips are not in the current list, and names them on hover. A plain click, Esc or the bar's x clears them; a new folder, type, filter or sort clears the selection as before.
 - **Compare**, **Download** (upstream's Download Selected: one ZIP) and **Delete** live in a bar under the grid that appears only when they can be used.
 - Confirmations (deleting more than one asset, Rebuild Cache) appear in **ComfyUI's own dialog**, so they also work in ComfyUI Desktop, which does not show the browser's.
 - No outline around the panel on shift-click selection.

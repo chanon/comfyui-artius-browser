@@ -9,6 +9,8 @@
 //     MORE THAN ONE item is selected. A single item already has both on the
 //     card and in the context menu (and Delete on the Delete key).
 //   - the bar shows when any does, with the count and a way to deselect.
+//   - it also shows while a search has taken selected clips off the list (see
+//     fork-keep-selection), saying how many and naming them on hover.
 //
 // As with the settings popup the buttons are MOVED, not rebuilt: the same
 // elements, so the panel's listeners, tooltips and disabling keep working.
@@ -65,9 +67,15 @@ export function tsInstallForkSelectionBar(tsPanel) {
         tsBar.dataset.compare = String(tsShowCompare);
         tsBar.dataset.download = String(tsShowDownload);
         tsBar.dataset.delete = String(tsShowDelete);
-        tsBar.hidden = !(tsShowCompare || tsShowDownload || tsShowDelete);
-        tsCount.textContent = tsT("fork.selected", "{count} selected")
+        const tsHeld = tsRefs.tsForkHeldSelection?.() || [];
+        tsBar.hidden = !(tsShowCompare || tsShowDownload || tsShowDelete || tsHeld.length > 0);
+        const tsSelectedText = tsT("fork.selected", "{count} selected")
             .replace("{count}", String(tsItems.length));
+        tsCount.textContent = tsHeld.length > 0
+            ? tsT("fork.selectedHeld", "{selected}, {count} not in this list")
+                .replace("{selected}", tsSelectedText).replace("{count}", String(tsHeld.length))
+            : tsSelectedText;
+        tsCount.title = tsHeld.map((tsItem) => tsItem.filename).join("\n");
         tsRelabel();
         const tsClearLabel = tsT("fork.clearSelection", "Clear selection");
         tsClear.title = tsClearLabel;
