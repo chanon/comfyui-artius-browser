@@ -161,10 +161,16 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsStageMarkup = "";
         this.tsStageGhost = null;
         this.tsBoundKeydown = (tsEvent) => this.tsHandleWindowKeydown(tsEvent);
+        this.tsBoundLocaleChange = (tsEvent) => {
+            if (tsEvent?.detail?.locale && typeof tsEvent.detail.locale === "object") {
+                this.tsSetLocale(tsEvent.detail.locale);
+            }
+        };
         this.attachShadow({ mode: "open" });
     }
 
     connectedCallback() {
+        window.addEventListener("tsab:locale-changed", this.tsBoundLocaleChange);
         if (this.tsConnectedOnce) {
             return;
         }
@@ -702,17 +708,29 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     background: var(--ts-bg-2);
                 }
                 .ts-video-compare-shell {
-                    width: min(100%, 1560px);
+                    width: 100%;
+                    height: 100%;
+                    min-height: 0;
                     margin: 0 auto;
                     display: grid;
-                    gap: 8px;
-                    align-items: center;
+                    grid-template-rows: minmax(0, 1fr) auto;
+                    gap: 4px;
                     justify-self: stretch;
+                    --ts-wipe: 50%;
+                }
+                .ts-viewer[data-compare="true"] .ts-stage[data-kind="video"] {
+                    height: 100dvh;
+                    box-sizing: border-box;
+                    padding: 0;
+                    overflow: hidden;
                 }
                 .ts-video-compare-grid {
+                    position: relative;
                     display: grid;
-                    gap: 8px;
+                    min-height: 0;
+                    gap: 4px;
                     grid-template-columns: repeat(2, minmax(0, 1fr));
+                    grid-auto-rows: minmax(0, 1fr);
                 }
                 .ts-video-compare-shell[data-count="2"] .ts-video-compare-grid {
                     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -727,21 +745,26 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     grid-template-columns: repeat(2, minmax(0, 1fr));
                 }
                 .ts-video-compare-card {
-                    display: grid;
-                    gap: 4px;
+                    position: relative;
+                    min-height: 0;
                     min-width: 0;
+                    overflow: hidden;
                 }
                 .ts-video-compare-card[data-primary="true"] .ts-video-compare-label {
                     border-color: var(--ts-accent);
                 }
                 .ts-video-compare-label {
+                    position: absolute;
+                    top: 8px;
+                    left: 8px;
+                    z-index: 1;
                     padding: 4px 8px;
                     border: 1px solid var(--ts-border);
                     border-radius: 10px;
-                    background: var(--ts-surface-ghost);
+                    background: var(--ts-nav-surface);
                     color: var(--ts-text);
                     width: fit-content;
-                    max-width: 100%;
+                    max-width: calc(100% - 80px);
                     justify-self: center;
                     font: 600 9px/1.2 inherit;
                     text-align: center;
@@ -749,19 +772,46 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     text-overflow: ellipsis;
                     white-space: nowrap;
                 }
-                .ts-video-compare-video {
+                .ts-stage .ts-video-compare-video {
+                    position: absolute;
+                    inset: 0;
                     width: 100%;
-                    max-height: min(78vh, calc(100dvh - 120px));
-                    justify-self: center;
+                    height: 100%;
+                    object-fit: contain;
+                    border-radius: 0;
                 }
-                .ts-video-compare-shell[data-count="2"] .ts-video-compare-video {
-                    max-height: min(78vh, calc(100dvh - 120px));
+                .ts-video-compare-shell[data-layout="grid"] .ts-video-compare-divider,
+                .ts-video-compare-shell[data-layout="grid"] .ts-video-compare-range {
+                    display: none;
                 }
-                .ts-video-compare-shell[data-count="3"] .ts-video-compare-video {
-                    max-height: min(70vh, calc(100dvh - 140px));
+                .ts-video-compare-shell[data-layout="wipe"] .ts-video-compare-card {
+                    position: absolute;
+                    inset: 0;
                 }
-                .ts-video-compare-shell[data-count="4"] .ts-video-compare-video {
-                    max-height: min(35vh, calc((100dvh - 160px) / 2));
+                .ts-video-compare-shell[data-layout="wipe"] .ts-video-compare-card:nth-child(2) {
+                    clip-path: inset(0 calc(100% - var(--ts-wipe)) 0 0);
+                }
+                .ts-video-compare-shell[data-layout="wipe"] .ts-video-compare-card:first-child .ts-video-compare-label {
+                    left: auto;
+                    right: 80px;
+                }
+                .ts-video-compare-grid:has(.ts-video-compare-range:focus-visible) .ts-video-compare-divider {
+                    width: 4px;
+                    box-shadow: 0 0 0 2px var(--ts-accent);
+                }
+                .ts-video-compare-modes {
+                    display: flex;
+                    justify-content: center;
+                    gap: 6px;
+                }
+                .ts-video-compare-mode {
+                    min-height: 28px;
+                    padding: 4px 10px;
+                    font-size: 11px;
+                }
+                .ts-video-compare-mode[aria-pressed="true"] {
+                    border-color: var(--ts-accent);
+                    background: color-mix(in srgb, var(--ts-accent) 22%, transparent);
                 }
                 .ts-video-compare-status {
                     min-height: 14px;
@@ -770,10 +820,12 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     font: 500 11px/1.3 inherit;
                 }
                 .ts-video-compare-status[data-active="false"] {
-                    visibility: hidden;
+                    display: none;
                 }
                 .ts-video-compare-controls {
-                    width: min(100%, 1040px);
+                    width: 100%;
+                    box-sizing: border-box;
+                    padding: 0 8px 6px;
                     margin: 0 auto;
                     display: grid;
                     gap: 6px;
@@ -1090,18 +1142,17 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                        narrow layout has to restate them or a 3-up row would
                        survive on a phone. */
                     .ts-video-compare-grid,
-                    .ts-video-compare-shell[data-count="2"] .ts-video-compare-grid,
                     .ts-video-compare-shell[data-count="3"] .ts-video-compare-grid,
                     .ts-video-compare-shell[data-count="4"] .ts-video-compare-grid {
                         grid-template-columns: minmax(0, 1fr);
                     }
-                    .ts-video-compare-video,
-                    .ts-video-compare-shell[data-count="3"] .ts-video-compare-video,
-                    .ts-video-compare-shell[data-count="4"] .ts-video-compare-video {
-                        max-height: min(32vh, calc(100dvh - 320px));
-                    }
                     .ts-video-transport {
-                        grid-template-columns: minmax(0, 1fr);
+                        display: flex;
+                        flex-wrap: wrap;
+                    }
+                    .ts-video-seek {
+                        flex: 1 1 120px;
+                        width: auto;
                     }
                     .ts-video-play-toggle {
                         justify-self: stretch;
@@ -1129,6 +1180,11 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     }
                     .ts-video-shell video {
                         max-height: max(160px, calc(62dvh - 200px));
+                    }
+                }
+                @media (max-aspect-ratio: 1/1) {
+                    .ts-video-compare-shell[data-count="2"] .ts-video-compare-grid {
+                        grid-template-columns: minmax(0, 1fr);
                     }
                 }
             </style>
@@ -1241,9 +1297,44 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsRender();
     }
 
+    disconnectedCallback() {
+        window.removeEventListener("tsab:locale-changed", this.tsBoundLocaleChange);
+    }
+
     tsSetLocale(tsLocale) {
+        if (tsLocale === this.tsLocale) {
+            return;
+        }
+        const tsAsset = this.tsItems?.[this.tsIndex];
+        const tsPreviousLocale = this.tsLocale;
+        const tsSameStage = tsAsset && this.tsStageMarkup === this.tsBuildStageMarkup(tsAsset);
         this.tsLocale = tsLocale || {};
+        if (tsSameStage && this.tsRefs?.tsStage) {
+            // Only labels changed. Keep the same media, playback, zoom and wipe.
+            this.tsStageMarkup = this.tsBuildStageMarkup(tsAsset);
+            const tsStage = this.tsRefs.tsStage;
+            for (const tsElement of tsStage.querySelectorAll("[data-ts-i18n]")) {
+                tsElement.textContent = this.tsT(tsElement.dataset.tsI18n, tsElement.textContent);
+            }
+            for (const tsAttribute of ["title", "aria-label"]) {
+                for (const tsElement of tsStage.querySelectorAll(`[data-ts-i18n-${tsAttribute}]`)) {
+                    const tsKey = tsElement.getAttribute(`data-ts-i18n-${tsAttribute}`);
+                    tsElement.setAttribute(tsAttribute, this.tsT(tsKey, tsElement.getAttribute(tsAttribute)));
+                }
+            }
+            // Runtime status nodes can show loading, failure, or context loss.
+            for (const tsElement of tsStage.querySelectorAll(".ts-media-status, .ts-3d-status")) {
+                const tsKey = Object.keys(tsPreviousLocale || {}).find((tsCandidate) => tsCandidate.startsWith("status.") && tsPreviousLocale[tsCandidate] === tsElement.textContent);
+                if (tsKey) {
+                    tsElement.textContent = this.tsT(tsKey, tsElement.textContent);
+                }
+            }
+            this.tsStageLocaleRefresh?.();
+        }
         this.tsRender();
+        if (this.tsRefs?.tsHelp && !this.tsRefs.tsHelp.hidden) {
+            this.tsToggleHelp(true, false);
+        }
     }
 
     tsT(tsKey, tsFallback) {
@@ -1419,6 +1510,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsVideoFrameStepper = null;
         this.tsMediaEdgeJumper = null;
         this.tsImageZoomHandler = null;
+        this.tsStageLocaleRefresh = null;
         // tsDetailRequestToken stays monotonic on purpose: a stale detail
         // fetch is rejected by the ++token guard, not by a reset here.
         // Resetting it let a concurrent tsRender() (e.g. prefetch) drop the
@@ -1509,7 +1601,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
     // The lightbox's own shortcut card. The panel's "?" help lives in the
     // panel's shadow root, under this overlay, so "?" pressed here did
     // nothing at all.
-    tsToggleHelp(tsShow) {
+    tsToggleHelp(tsShow, tsFocus = true) {
         const tsHelp = this.tsRefs?.tsHelp;
         if (!tsHelp) {
             return;
@@ -1534,7 +1626,9 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 .map(([tsKeys, tsText]) => `<div class="ts-help-row"><kbd>${this.tsEscapeHTML(tsKeys)}</kbd><span>${this.tsEscapeHTML(tsText)}</span></div>`)
                 .join("");
             tsHelp.hidden = false;
-            this.tsRefs.tsHelpClose.focus({ preventScroll: true });
+            if (tsFocus) {
+                this.tsRefs.tsHelpClose.focus({ preventScroll: true });
+            }
             return;
         }
         tsHelp.hidden = true;
@@ -2502,6 +2596,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         const tsHandleFirstFrame = () => tsJumpToEdge(-1);
         const tsHandleLastFrame = () => tsJumpToEdge(1);
 
+        this.tsStageLocaleRefresh = tsUpdateFrameLabel;
         const tsHandleLoadedMetadata = () => tsUpdateFrameLabel();
         const tsHandleTimeUpdate = () => tsUpdateFrameLabel();
         const tsHandleSeeked = () => tsUpdateFrameLabel();
@@ -2572,6 +2667,34 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         };
     }
 
+    tsSetupVideoCompareLayout(tsStage) {
+        const tsShell = tsStage.querySelector(".ts-video-compare-shell");
+        const tsRange = tsShell?.querySelector(".ts-video-compare-range");
+        const tsModeButtons = Array.from(tsShell?.querySelectorAll(".ts-video-compare-mode") || []);
+        const tsApplyWipe = () => {
+            const tsValue = Math.max(0, Math.min(100, Number(tsRange.value)));
+            tsShell.style.setProperty("--ts-wipe", `${tsValue}%`);
+            tsRange.setAttribute("aria-valuetext", `${tsValue}%`);
+        };
+        // Keep the same media elements and transport when the layout changes:
+        // rebuilding the stage would reset playback, buffering and frame position.
+        const tsHandleModeClick = (tsEvent) => {
+            tsShell.dataset.layout = tsEvent.currentTarget.dataset.layout;
+            tsModeButtons.forEach((tsButton) => {
+                tsButton.setAttribute("aria-pressed", String(tsButton.dataset.layout === tsShell.dataset.layout));
+            });
+        };
+        tsRange?.addEventListener("input", tsApplyWipe);
+        tsModeButtons.forEach((tsButton) => tsButton.addEventListener("click", tsHandleModeClick));
+        if (tsRange) {
+            tsApplyWipe();
+        }
+        return () => {
+            tsRange?.removeEventListener("input", tsApplyWipe);
+            tsModeButtons.forEach((tsButton) => tsButton.removeEventListener("click", tsHandleModeClick));
+        };
+    }
+
     tsSetupVideoCompareStage(tsAsset) {
         const tsStage = this.tsRefs.tsStage;
         const tsVideos = Array.from(tsStage?.querySelectorAll(".ts-compare-video") || []);
@@ -2595,6 +2718,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             return null;
         }
 
+        const tsCleanupLayout = this.tsSetupVideoCompareLayout(tsStage);
         const tsStatusLabel = tsStage?.querySelector(".ts-video-compare-status");
         const tsPrimaryVideo = tsVideos.find((tsVideo) => tsVideo.dataset.primary === "true") || tsVideos[0];
         // How far ahead a clip must be buffered before playback resumes. The
@@ -2643,6 +2767,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 ? this.tsT("button.unmute", "Unmute")
                 : this.tsT("button.mute", "Mute");
             tsMuteButton.setAttribute("aria-pressed", String(Boolean(tsPrimaryVideo.muted)));
+            tsMuteButton.dataset.tsI18n = tsPrimaryVideo.muted ? "button.unmute" : "button.mute";
         };
         const tsHandleMuteClick = () => {
             tsPrimaryVideo.muted = !tsPrimaryVideo.muted;
@@ -2824,6 +2949,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             if (tsNextKey !== tsTransportKey) {
                 tsTransportKey = tsNextKey;
                 tsPlayToggleButton.textContent = tsToggleText;
+                tsPlayToggleButton.dataset.tsI18n = tsDesiredPlaying ? "button.pause" : "button.play";
                 tsTimeLabel.textContent = tsTimeText;
                 tsFrameLabel.textContent = tsFrameText;
                 tsSeekInput.max = String(Math.max(0, tsDuration));
@@ -2836,6 +2962,10 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             if (!tsSeekDragging) {
                 tsSeekInput.value = String(tsDuration > 0 ? Math.min(tsDuration, tsCurrentTime) : 0);
             }
+        };
+        this.tsStageLocaleRefresh = () => {
+            tsRenderMute();
+            tsUpdateTransport();
         };
         const tsStopTicker = () => {
             if (tsTickerId) {
@@ -3088,6 +3218,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         tsUpdateTransport();
 
         return () => {
+            tsCleanupLayout();
             tsStopTicker();
             this.tsVideoFrameStepper = null;
             this.tsMediaEdgeJumper = null;
@@ -3435,6 +3566,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         const tsRetryButton = document.createElement("button");
         tsRetryButton.type = "button";
         tsRetryButton.className = "ts-3d-retry";
+        tsRetryButton.dataset.tsI18n = "empty.retryAction";
         tsRetryButton.textContent = this.tsT("empty.retryAction", "Try again");
         tsRetryButton.hidden = true;
         tsShell.append(tsRetryButton);
@@ -3502,9 +3634,9 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 return;
             }
             tsDisposeController();
-            tsFail(tsContextLostText);
+            tsFail(tsContextLostText());
         }
-        const tsContextLostText = this.tsT("status.3dContextLost", "The 3D view was lost (the graphics card reset or ran out of memory).");
+        const tsContextLostText = () => this.tsT("status.3dContextLost", "The 3D view was lost (the graphics card reset or ran out of memory).");
 
         const tsLoad = async () => {
             const tsToken = ++tsLoadToken;
@@ -4119,8 +4251,10 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsWaveform.setAttribute("aria-valuenow", String(Math.round(tsCurrent)));
             tsWaveform.setAttribute("aria-valuetext", tsTime.textContent);
             tsPlayButton.textContent = tsAudio.paused ? this.tsT("button.play", "Play") : this.tsT("button.pause", "Pause");
+            tsPlayButton.dataset.tsI18n = tsAudio.paused ? "button.play" : "button.pause";
         };
 
+        this.tsStageLocaleRefresh = tsUpdateUI;
         const tsSeekFromClientX = (tsClientX) => {
             const tsDuration = Number.isFinite(tsAudio.duration) && tsAudio.duration > 0
                 ? tsAudio.duration

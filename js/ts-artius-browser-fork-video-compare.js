@@ -248,6 +248,52 @@ const TS_FORK_COMPARE_CSS = `
             flex-basis: 100%;
         }
     }
+
+    /* Upstream 1.20.2 has a comparison of its own (edge to edge, names floating
+       over the clips, Side by side / Wipe for two clips). This one stays: its
+       buttons are hidden, which leaves its Wipe unused, and what its rules set
+       that the ones above never needed to is put back. */
+    .ts-viewer .ts-video-compare-shell[data-fork-layout] .ts-video-compare-modes {
+        display: none;
+    }
+    .ts-viewer[data-compare="true"] .ts-stage[data-kind="video"] {
+        padding: 8px 14px 10px;
+        overflow: visible;
+    }
+    .ts-viewer .ts-video-compare-shell[data-fork-layout] .ts-video-compare-card {
+        overflow: visible;
+    }
+    .ts-viewer .ts-video-compare-shell[data-fork-layout] .ts-video-compare-controls {
+        padding: 0;
+    }
+    .ts-viewer .ts-video-compare-shell[data-fork-layout="side"] .ts-video-compare-card {
+        position: static;
+        display: grid;
+        gap: 4px;
+    }
+    .ts-viewer .ts-video-compare-shell[data-fork-layout="side"] .ts-video-compare-label {
+        position: static;
+        max-width: 100%;
+        background: var(--ts-surface-ghost);
+    }
+    .ts-viewer .ts-video-compare-shell[data-fork-layout="side"] .ts-video-compare-video {
+        position: static;
+        border-radius: 12px;
+    }
+    @media (max-width: 1080px) {
+        .ts-viewer .ts-video-compare-shell[data-fork-layout][data-count="2"] .ts-video-compare-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        .ts-viewer .ts-video-compare-shell[data-fork-layout] .ts-video-transport {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+    @media (min-width: 1081px) and (max-aspect-ratio: 1/1) {
+        .ts-viewer .ts-video-compare-shell[data-fork-layout][data-count="2"] .ts-video-compare-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
 `;
 
 export function tsInstallForkVideoCompare(tsPanel) {

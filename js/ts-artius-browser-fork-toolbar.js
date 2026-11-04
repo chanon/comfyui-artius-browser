@@ -25,6 +25,12 @@ const TS_FORK_TOOLBAR_LAST = [".ts-preview-size", ".ts-rescan", ".ts-search-clus
 // gives, so a translation is left alone and only the English text changes.
 const TS_FORK_LABELS = {
     "label.allRoots": ["All Folders", "All"],
+    "button.sortAsc": ["Ascending", "Asc"],
+    "button.sortDesc": ["Descending", "Desc"],
+    "tooltip.compareSelected": [
+        "Select 2–4 images or videos to compare them. Two images use a wipe; two videos offer side-by-side and wipe modes. Video playback stays synchronized.",
+        "Select 2–4 images or videos to compare them. Two images use a wipe; videos offer Side by Side and Split. Video playback stays synchronized.",
+    ],
 };
 
 export function tsInstallForkToolbar(tsPanel) {
