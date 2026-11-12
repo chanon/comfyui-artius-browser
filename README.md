@@ -10,6 +10,7 @@ This is a fork of [AlexYez/comfyui-artius-browser](https://github.com/AlexYez/co
 - Input and Output each **remember their own settings**: file types, Flat / Tree, Recurse, sort order, Favorites and filters.
 - **Hide 3D**: the 3D file type is hidden (on by default, can be turned off in settings).
 - **Recurse** toggle in Tree mode: off, the grid shows only the files in the selected folder, not its subfolders.
+- **Length** filter (min / max seconds, decimals allowed) in the Filters row, after Width and Height: shows the videos and audio files whose length is in that range, both ends included. Images have no length, so they are hidden while a length is set. Kept per root like the other filters. Needs a restart of ComfyUI (the server does the filtering).
 - Sort by **Modified** or **Created** instead of a single Date.
 - **Filename pill** on every thumbnail (can be turned off in settings). Landscape thumbnails are centred between the hover bar and the pills.
 - Settings popup behind a gear in the title row, holding Autoscan, Rebuild Cache, Show filenames, **Only show Assets** (hides the Assets / Workflows switch), **Hide 3D** and **Input / Output as a toggle**.

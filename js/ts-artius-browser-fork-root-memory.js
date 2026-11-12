@@ -1,7 +1,8 @@
 // obvpm fork: each root (Output, Input, All) keeps its own view settings.
 //
 // Remembered per root: the type chips, Flat / Tree, Recurse, the sort order
-// (key, direction, Modified or Created), Favorites, and the filters (values
+// (key, direction, Modified or Created), Favorites, and the filters (values,
+// the fork's Length included,
 // and whether the filter row is open). Switching roots puts the settings of
 // the root being left aside and brings back those of the root being entered;
 // a root seen for the first time starts from the settings it was entered
@@ -17,6 +18,8 @@
 // saves and fetches with the restored settings. The Input / Output buttons
 // fire that same event, so they are covered too.
 
+import { tsForkCleanSeconds } from "./ts-artius-browser-fork-length-filter.js";
+
 const TS_FORK_ROOT_MEMORY_KEY = "tsab.fork.rootSettings";
 const TS_FORK_TYPES = ["image", "video", "audio", "3d"];
 const TS_FORK_SORT_KEYS = ["created_at", "filename", "size_bytes"];
@@ -27,6 +30,9 @@ const TS_FORK_FILTER_FIELDS = [
     ["tsFilterMaxWidth", "number"],
     ["tsFilterMinHeight", "number"],
     ["tsFilterMaxHeight", "number"],
+    // fork-length-filter.js: seconds, decimals kept
+    ["tsForkFilterMinDuration", "seconds"],
+    ["tsForkFilterMaxDuration", "seconds"],
 ];
 
 function tsReadStored() {
@@ -97,7 +103,9 @@ function tsApplySnapshot(tsPanel, tsSnap) {
         }
         tsState[tsField] = tsKind === "number"
             ? Math.max(0, Math.floor(Number(tsFilters[tsField]) || 0))
-            : String(tsFilters[tsField] || "");
+            : tsKind === "seconds"
+                ? tsForkCleanSeconds(tsFilters[tsField])
+                : String(tsFilters[tsField] || "");
     }
     if (typeof tsSnap.filtersOpen === "boolean") {
         tsState.tsFiltersOpen = tsSnap.filtersOpen || Boolean(tsPanel.tsHasActiveFilters?.());

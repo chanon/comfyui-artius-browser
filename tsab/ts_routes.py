@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import asyncio
+import math
 
 from aiohttp import web as TSWeb
 from .ts_route_errors import TSWrapRouteHandler
@@ -122,6 +123,19 @@ def TSParseAssetIdList(ts_value) -> list[int]:
     return ts_asset_ids
 
 
+# obvpm fork: a length in seconds for the "Length" filter; junk, inf, NaN and
+# 0 or less mean "no filter" (the panel only sends a value above 0). A strict
+# float(), not TSParseMaybeFloat: that one reads "1e999" as 1.
+def TSParseForkDuration(ts_value) -> float | None:
+    try:
+        ts_float = float(str(ts_value).strip())
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(ts_float) or ts_float <= 0:
+        return None
+    return ts_float
+
+
 def TSRejectUnsupportedAssetQueryParams(ts_query) -> None:
     if "metadata" in ts_query:
         raise TSWeb.HTTPBadRequest(reason="Unsupported query param: metadata")
@@ -194,6 +208,9 @@ async def TSHandleAssets(ts_runtime, ts_request):
         "max_width": TSParseMaybeInt(ts_request.query.get("max_width")),
         "min_height": TSParseMaybeInt(ts_request.query.get("min_height")),
         "max_height": TSParseMaybeInt(ts_request.query.get("max_height")),
+        # obvpm fork: the panel's "Length" filter, in seconds (see ts_db_query).
+        "min_duration": TSParseForkDuration(ts_request.query.get("min_duration")),
+        "max_duration": TSParseForkDuration(ts_request.query.get("max_duration")),
         "sort_key": ts_request.query.get("sort") or "created_at",
         "sort_direction": ts_request.query.get("order") or "desc",
         "search_scope": ts_request.query.get("search_scope") or "filename",

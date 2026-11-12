@@ -137,6 +137,14 @@ def TSBuildAssetQueryParts(
     if ts_filters.get("max_height") is not None:
         ts_where_clauses.append("assets_view.height <= ?")
         ts_parameters.append(int(ts_filters["max_height"]))
+    # obvpm fork: the panel's "Length" filter (seconds). Rows without a length
+    # (images, files whose length could not be read) never match it.
+    if ts_filters.get("min_duration") is not None:
+        ts_where_clauses.append("assets_view.duration >= ?")
+        ts_parameters.append(float(ts_filters["min_duration"]))
+    if ts_filters.get("max_duration") is not None:
+        ts_where_clauses.append("assets_view.duration <= ?")
+        ts_parameters.append(float(ts_filters["max_duration"]))
     ts_where_clauses.append("assets_view.is_companion_image = 0")
 
     ts_sort_key = TSResolveSortKey(ts_filters.get("sort_key"))
