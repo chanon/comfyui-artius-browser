@@ -45,7 +45,7 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
     const tsAssetLabel = tsDeps.t("label.asset", "Asset");
     if (tsAsset.type === "image") {
         if (tsDeps.isImageCompareMode()) {
-            const tsCompareItems = tsDeps.compareItems.slice(0, 4);
+            const tsCompareItems = tsDeps.compareItems.slice(0, 6);   // obvpm fork: was 4 (= TS_COMPARE_MAX_ITEMS; no import, the tests copy this module alone)
             const tsImageLabel = tsDeps.t("type.image", "Image");
             if (tsCompareItems.length === 2) {
                 const [tsBeforeItem, tsAfterItem] = tsCompareItems;
@@ -94,7 +94,7 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
     }
     if (tsAsset.type === "video") {
         if (tsDeps.isVideoCompareMode()) {
-            const tsCompareItems = tsDeps.compareItems.slice(0, 4);
+            const tsCompareItems = tsDeps.compareItems.slice(0, 6);   // obvpm fork: was 4 (= TS_COMPARE_MAX_ITEMS; no import, the tests copy this module alone)
             const tsVideoLabel = tsDeps.t("type.video", "Video");
             return `
                 <div class="ts-video-compare-shell" data-count="${tsCompareItems.length}" data-layout="grid">

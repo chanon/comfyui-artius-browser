@@ -37,7 +37,8 @@ This is a fork of [AlexYez/comfyui-artius-browser](https://github.com/AlexYez/co
 **Video comparison**
 
 - The clips fill the stage, with each name on its own row above its clip. This comparison stays in place of upstream's newer one: **Split** below instead of its Wipe.
-- **Split** view for two to four clips: all stacked, with a draggable divider between each pair so every clip shows in its own strip, like the two-image comparison.
+- **Up to six clips** (upstream four), laid out 3 x 2 when there are five or six; images too.
+- **Split** view for two to six clips: all stacked, with a draggable divider between each pair so every clip shows in its own strip, like the two-image comparison. The dividers can come almost together (a strip keeps 0.5% of the width); where they meet, the first move decides which one moves.
 - The same zoom for the comparison: every clip zooms and moves together so they always show the same part of the frame, with **Fit** / **1:1** buttons in the controls row (1:1 is exact for the left-most clip, and follows when you drag another one to the front; the others are shown at the same size relative to their own Fit). Works in Side by Side and Split.
 - **Drag a clip's name** to change the order of the clips (Side by Side and Split; playback carries on). A new comparison starts in the grid's order. **Click** a clip's name (without dragging) to copy its file name.
 - The **x** after a clip's name takes it out of the comparison; it stays selected in the panel. The others go on from the same moment (still playing if they were, in full screen if it was); the clip with the sound stays, or the left-most one takes over. With one clip left it shows on its own.

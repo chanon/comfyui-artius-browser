@@ -1,5 +1,7 @@
 export const TS_COMPARE_MIN_ITEMS = 2;
-export const TS_COMPARE_MAX_ITEMS = 4;
+// obvpm fork: six (upstream four). The fork's video comparison lays 5 and 6 out
+// 3 x 2 and splits them into six strips (fork-video-compare.js).
+export const TS_COMPARE_MAX_ITEMS = 6;
 
 export function tsIsViewerTypedCompareMode(tsAsset, tsCompareItems, tsType) {
     return Boolean(

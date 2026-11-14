@@ -29,8 +29,10 @@ const TS_FORK_LABELS = {
     "button.sortDesc": ["Descending", "Desc"],
     "tooltip.compareSelected": [
         "Select 2–4 images or videos to compare them. Two images use a wipe; two videos offer side-by-side and wipe modes. Video playback stays synchronized.",
-        "Select 2–4 images or videos to compare them. Two images use a wipe; videos offer Side by Side and Split. Video playback stays synchronized.",
+        "Select 2–6 images or videos to compare them. Two images use a wipe; videos offer Side by Side and Split. Video playback stays synchronized.",
     ],
+    // the fork compares up to six (viewer-state.js)
+    "shortcuts.selectN": ["Select 2-4", "Select 2-6"],
 };
 
 export function tsInstallForkToolbar(tsPanel) {

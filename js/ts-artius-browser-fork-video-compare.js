@@ -280,9 +280,21 @@ const TS_FORK_COMPARE_CSS = `
         position: static;
         border-radius: 12px;
     }
+    /* five or six clips (the fork compares up to six): 3 x 2, as upstream lays 3 out 3-up */
+    .ts-viewer .ts-video-compare-shell[data-count="5"] .ts-video-compare-grid,
+    .ts-viewer .ts-video-compare-shell[data-count="6"] .ts-video-compare-grid,
+    .ts-viewer .ts-image-compare-grid[data-count="5"],
+    .ts-viewer .ts-image-compare-grid[data-count="6"] {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
     @media (max-width: 1080px) {
         .ts-viewer .ts-video-compare-shell[data-fork-layout][data-count="2"] .ts-video-compare-grid {
             grid-template-columns: minmax(0, 1fr);
+        }
+        /* upstream stacks 3 and 4 in one column here; six in one column is too small */
+        .ts-viewer .ts-video-compare-shell[data-count="5"] .ts-video-compare-grid,
+        .ts-viewer .ts-video-compare-shell[data-count="6"] .ts-video-compare-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
         }
         .ts-viewer .ts-video-compare-shell[data-fork-layout] .ts-video-transport {
             display: grid;
@@ -318,7 +330,7 @@ export function tsInstallForkVideoCompare(tsPanel) {
         if (!tsShell || !tsGrid || !tsControls || tsShell.dataset.forkLayout) {
             return tsResult;
         }
-        // a split needs at least two clips (upstream compares up to four)
+        // a split needs at least two clips (the fork compares up to six)
         const tsCards = Array.from(tsGrid.querySelectorAll(".ts-video-compare-card"));
         const tsCanSplit = tsCards.length >= 2;
         const tsButtons = [];
@@ -344,7 +356,9 @@ export function tsInstallForkVideoCompare(tsPanel) {
             // N clips: N-1 cuts (percent of the width, ascending); card i shows
             // between cut i-1 and cut i, and a divider sits on each cut
             const tsCount = tsCards.length;
-            const tsMinStrip = 4;
+            // percent of the width a strip keeps: dividers can come almost together
+            // (was 4: two dividers could not get closer than ~40 px)
+            const tsMinStrip = 0.5;
             const tsCuts = tsCards.slice(1).map((tsCard, tsIndex) => ((tsIndex + 1) * 100) / tsCount);
             const tsDividers = tsCuts.map(() => {
                 const tsDivider = document.createElement("div");
@@ -390,6 +404,10 @@ export function tsInstallForkVideoCompare(tsPanel) {
             // drag anywhere over the clips: the nearest divider follows the
             // pointer, kept between its neighbours
             let tsDragIndex = -1;
+            // dividers (almost) on top of each other: which one is dragged is
+            // decided by the first move -- right takes the right-most, left the
+            // left-most -- or the nearest-first rule could never pull them apart
+            let tsTied = null;
             const tsShareAt = (tsEvent) => {
                 const tsRect = tsGrid.getBoundingClientRect();
                 if (!tsRect.width) {
@@ -417,17 +435,34 @@ export function tsInstallForkVideoCompare(tsPanel) {
                 }
                 tsDragIndex = tsCuts.reduce((tsBest, tsCut, tsIndex) =>
                     Math.abs(tsCut - tsShare) < Math.abs(tsCuts[tsBest] - tsShare) ? tsIndex : tsBest, 0);
+                const tsBestGap = Math.abs(tsCuts[tsDragIndex] - tsShare);
+                const tsNear = tsCuts.map((tsCut, tsIndex) => tsIndex)
+                    .filter((tsIndex) => Math.abs(tsCuts[tsIndex] - tsShare) <= tsBestGap + tsMinStrip + 0.1);
                 tsGrid.setPointerCapture?.(tsEvent.pointerId);
                 tsEvent.preventDefault();
+                if (tsNear.length > 1) {
+                    tsTied = { tsNear, tsFrom: tsShare };
+                    return;
+                }
+                tsTied = null;
                 tsMoveTo(tsEvent);
             });
             tsGrid.addEventListener("pointermove", (tsEvent) => {
+                if (tsTied) {
+                    const tsShare = tsShareAt(tsEvent);
+                    if (tsShare === null || Math.abs(tsShare - tsTied.tsFrom) < 0.05) {
+                        return;
+                    }
+                    tsDragIndex = tsShare > tsTied.tsFrom ? Math.max(...tsTied.tsNear) : Math.min(...tsTied.tsNear);
+                    tsTied = null;
+                }
                 if (tsDragIndex >= 0) {
                     tsMoveTo(tsEvent);
                 }
             });
             const tsStop = () => {
                 tsDragIndex = -1;
+                tsTied = null;
             };
             tsGrid.addEventListener("pointerup", tsStop);
             tsGrid.addEventListener("pointercancel", tsStop);

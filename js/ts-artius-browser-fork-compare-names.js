@@ -73,7 +73,7 @@ export function tsInstallForkCompareNames(tsPanel) {
         const tsResult = tsBindStageInteractions.apply(this, tsArgs);
         const tsLabels = Array.from(this.tsRefs.tsStage.querySelectorAll(
             ".ts-video-compare-grid .ts-video-compare-card .ts-video-compare-label"));
-        // the cards are built from tsCompareItems, in that order (up to four)
+        // the cards are built from tsCompareItems, in that order (up to six)
         const tsItems = (Array.isArray(this.tsCompareItems) ? this.tsCompareItems : []).slice(0, tsLabels.length);
         if (tsLabels.length < 2 || tsItems.length !== tsLabels.length) {
             return tsResult;
