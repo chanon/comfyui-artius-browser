@@ -13,7 +13,7 @@ from .ts_settings import (
     TS_MAX_INDEX_FILES,
 )
 from .ts_logging import TSLogVerbose
-from .ts_utils import TSIsSqliteInt, TSParseAssetCursor, TSParseDateToEpoch, TSParseMaybeInt, TSParseQueryList
+from .ts_utils import TSIsSqliteInt, TSNormalizeSearchText, TSParseAssetCursor, TSParseDateToEpoch, TSParseMaybeInt, TSParseQueryList
 
 TSRoutesRegistered = False
 
@@ -136,6 +136,26 @@ def TSParseForkDuration(ts_value) -> float | None:
     return ts_float
 
 
+# obvpm fork: the panel's "Multiple" list -- one name per line. Each line is
+# trimmed, loses surrounding quotes and any folder part of a pasted path
+# (C:\out\clip.mp4 -> clip.mp4); empty lines and repeats are dropped.
+TS_FORK_MAX_NAMES = 300
+TS_FORK_MAX_NAME_CHARS = 300
+
+
+def TSParseForkNames(ts_value) -> list[str]:
+    ts_names: list[str] = []
+    for ts_line in str(ts_value or "").splitlines():
+        ts_name = ts_line.strip().strip("\"'").strip()
+        ts_name = ts_name.replace("\\", "/").rsplit("/", 1)[-1].strip()
+        ts_name = TSNormalizeSearchText(ts_name)[:TS_FORK_MAX_NAME_CHARS]
+        if ts_name and ts_name not in ts_names:
+            ts_names.append(ts_name)
+        if len(ts_names) >= TS_FORK_MAX_NAMES:
+            break
+    return ts_names
+
+
 def TSRejectUnsupportedAssetQueryParams(ts_query) -> None:
     if "metadata" in ts_query:
         raise TSWeb.HTTPBadRequest(reason="Unsupported query param: metadata")
@@ -211,6 +231,8 @@ async def TSHandleAssets(ts_runtime, ts_request):
         # obvpm fork: the panel's "Length" filter, in seconds (see ts_db_query).
         "min_duration": TSParseForkDuration(ts_request.query.get("min_duration")),
         "max_duration": TSParseForkDuration(ts_request.query.get("max_duration")),
+        # obvpm fork: the panel's "Multiple" list (see ts_db_query).
+        "names": TSParseForkNames(ts_request.query.get("names")),
         "sort_key": ts_request.query.get("sort") or "created_at",
         "sort_direction": ts_request.query.get("order") or "desc",
         "search_scope": ts_request.query.get("search_scope") or "filename",

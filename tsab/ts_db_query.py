@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .ts_utils import TSBuildFTSQuery
+from .ts_utils import TSBuildFTSQuery, TSNormalizeSearchText
 
 TS_SORT_KEY_MAP: dict[str, dict[str, Any]] = {
     "created_at": {"column": "assets_view.created_at", "row_field": "created_at", "type": int, "collate": ""},
@@ -12,6 +12,17 @@ TS_SORT_KEY_MAP: dict[str, dict[str, Any]] = {
 }
 
 TS_DEFAULT_SORT_KEY = "created_at"
+
+
+# obvpm fork: LIKE escaping (the "\" escape itself first, then the wildcards),
+# as the folder clause below does.
+def TSForkEscapeLike(ts_text: str) -> str:
+    return str(ts_text).replace("\\", r"\\").replace("%", r"\%").replace("_", r"\_")
+
+
+# obvpm fork: the search box's parts, split on spaces, in NFC like the index.
+def TSForkSearchTerms(ts_text: str) -> list[str]:
+    return [ts_term for ts_term in TSNormalizeSearchText(ts_text).split() if ts_term]
 
 
 def TSResolveSortKey(ts_sort_key: str | None) -> str:
@@ -45,7 +56,16 @@ def TSBuildAssetQueryParts(
         # unknown scope falls back to filename.
         ts_search_prompts = str(ts_filters.get("search_scope") or "filename").lower() == "all"
         ts_fts_query = TSBuildFTSQuery(ts_search_text)
-        if ts_fts_query:
+        if not ts_search_prompts:
+            # obvpm fork: filename search = every space-separated part found
+            # ANYWHERE in the name. The FTS index only matches whole words or
+            # their start, so a name minus its first letter, or a pasted name
+            # holding a lone "+" or "-" (a word with no letters, which matches
+            # nothing), found nothing.
+            for ts_term in TSForkSearchTerms(ts_search_text):
+                ts_where_clauses.append("assets_view.filename LIKE ? ESCAPE '\\' COLLATE NOCASE")
+                ts_parameters.append(f"%{TSForkEscapeLike(ts_term)}%")
+        elif ts_fts_query:
             ts_from_sql = "assets_view INNER JOIN assets_fts ON assets_fts.rowid = assets_view.id"
             if ts_search_prompts:
                 # Match the whole FTS row (filename + prompt_text columns).
@@ -67,6 +87,15 @@ def TSBuildAssetQueryParts(
             else:
                 ts_where_clauses.append("assets_view.filename LIKE ? ESCAPE '\\' COLLATE NOCASE")
                 ts_parameters.append(f"%{ts_search_value}%")
+
+    # obvpm fork: the panel's "Multiple" list -- one name per line, a file shows
+    # when its name contains ANY line (as typed: spaces and punctuation count).
+    ts_names = [ts_name for ts_name in (ts_filters.get("names") or []) if ts_name]
+    if ts_names:
+        ts_where_clauses.append(
+            "(" + " OR ".join("assets_view.filename LIKE ? ESCAPE '\\' COLLATE NOCASE" for _ in ts_names) + ")"
+        )
+        ts_parameters.extend(f"%{TSForkEscapeLike(ts_name)}%" for ts_name in ts_names)
 
     if ts_filters.get("types"):
         ts_types = list(ts_filters["types"])
