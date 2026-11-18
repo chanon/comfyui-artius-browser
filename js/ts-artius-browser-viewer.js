@@ -40,6 +40,7 @@ import {
 import { tsBuildStageMarkup, tsResolveDisplayURL } from "./ts-artius-browser-viewer-stage.js";
 import { tsResolveDeleteOutcome } from "./ts-artius-browser-panel-selection.js";
 import { tsViewerSettings } from "./ts-artius-browser-settings.js";
+import { tsClipDuration, tsClipTime, tsSetClipTime, tsWatchClipStart } from "./ts-artius-browser-fork-clip-start.js";
 
 // Detaching a <video>/<audio> element from the DOM does not, by itself,
 // release the decoded frames, buffered network data, and media-pipeline
@@ -2749,6 +2750,9 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         tsVideos.forEach((tsVideo) => {
             tsVideo.controls = false;
             tsVideo.muted = tsVideo !== tsPrimaryVideo;
+            // obvpm fork: every time below is CLIP time, so a clip whose first
+            // frame is not at 0:00 lines up (ts-artius-browser-fork-clip-start.js)
+            tsWatchClipStart(tsVideo);
         });
         // The compare stage hides the native controls, and with them the only
         // way to silence the clip whose sound plays. Its own toggle shares the
@@ -2800,21 +2804,18 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             const tsFPS = Number(tsAsset?.technical_info?.fps || tsAsset?.fps || 0);
             return Number.isFinite(tsFPS) && tsFPS > 0 ? tsFPS : 30;
         };
-        const tsFormatFrameText = (tsCurrentTime = Number(tsPrimaryVideo.currentTime || 0)) => {
-            const tsDuration = Number(tsPrimaryVideo.duration || 0);
+        const tsFormatFrameText = (tsCurrentTime = tsClipTime(tsPrimaryVideo)) => {
+            const tsDuration = tsClipDuration(tsPrimaryVideo);
             const tsTime = tsDuration > 0
                 ? Math.min(tsCurrentTime, tsResolveLastFrameTime(tsDuration, tsResolveFPS()))
                 : tsCurrentTime;
             const tsFrameIndex = tsResolveVideoFrameIndex(tsTime, tsResolveFPS());
             return `${this.tsT("label.currentFrame", "Frame")} ${tsFrameIndex}`;
         };
-        const tsGetDuration = () => {
-            const tsDuration = Number(tsPrimaryVideo.duration || 0);
-            return Number.isFinite(tsDuration) && tsDuration > 0 ? tsDuration : 0;
-        };
+        const tsGetDuration = () => tsClipDuration(tsPrimaryVideo);
         const tsClampVideoTime = (tsVideo, tsTargetTime, tsFrameDuration = 0) => {
-            const tsDuration = Number(tsVideo.duration || 0);
-            if (!Number.isFinite(tsDuration) || tsDuration <= 0) {
+            const tsDuration = tsClipDuration(tsVideo);
+            if (tsDuration <= 0) {
                 return Math.max(0, Number(tsTargetTime) || 0);
             }
             const tsMaxTime = Math.max(0, tsDuration - Math.max(0, tsFrameDuration / 2));
@@ -2825,7 +2826,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             try {
                 tsVideos.forEach((tsVideo) => {
                     try {
-                        tsVideo.currentTime = tsClampVideoTime(tsVideo, tsTargetTime, tsFrameDuration);
+                        tsSetClipTime(tsVideo, tsClampVideoTime(tsVideo, tsTargetTime, tsFrameDuration));
                     } catch {
                         // no-op
                     }
@@ -2895,7 +2896,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             }
             const tsAligning = tsMode === "align";
             const tsForce = tsAligning || tsMode === "resume";
-            const tsMasterTime = Math.max(0, Number(tsPrimaryVideo.currentTime || 0));
+            const tsMasterTime = tsClipTime(tsPrimaryVideo);
             const tsMasterRate = Number(tsPrimaryVideo.playbackRate || 1) || 1;
             tsSyncing = true;
             try {
@@ -2906,7 +2907,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     if (tsIsAtEnd(tsVideo) && !tsForce) {
                         return;
                     }
-                    const tsDrift = Number(tsVideo.currentTime || 0) - tsMasterTime;
+                    const tsDrift = tsClipTime(tsVideo) - tsMasterTime;
                     const tsCorrection = tsResolveCompareSyncCorrection(tsDrift, tsMasterRate);
                     const tsNeedsSeek = tsAligning
                         ? Math.abs(tsDrift) > tsExactAlignSeconds
@@ -2916,7 +2917,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                         // the first and the clip visibly stutters in place.
                         if (!tsVideo.seeking) {
                             try {
-                                tsVideo.currentTime = tsClampVideoTime(tsVideo, tsMasterTime);
+                                tsSetClipTime(tsVideo, tsClampVideoTime(tsVideo, tsMasterTime));
                             } catch {
                                 // no-op
                             }
@@ -2937,7 +2938,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         };
         const tsUpdateTransport = () => {
             const tsDuration = tsGetDuration();
-            const tsCurrentTime = Math.max(0, Number(tsPrimaryVideo.currentTime || 0));
+            const tsCurrentTime = tsClipTime(tsPrimaryVideo);
             const tsTimeText = `${tsFormatTime(tsCurrentTime)} / ${tsFormatTime(tsDuration)}`;
             const tsFrameText = tsFormatFrameText(tsCurrentTime);
             const tsToggleText = tsDesiredPlaying ? this.tsT("button.pause", "Pause") : this.tsT("button.play", "Play");
@@ -3048,7 +3049,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 tsEachAtOwnEnd
                 || tsPrimaryVideo.ended
                 || tsIsAtEnd(tsPrimaryVideo)
-                || tsIsOnLastFrame(tsPrimaryVideo.currentTime, tsGetDuration(), tsResolveFPS())
+                || tsIsOnLastFrame(tsClipTime(tsPrimaryVideo), tsGetDuration(), tsResolveFPS())
             ) {
                 // Play on a finished group means replay, not a no-op (nor a
                 // single frame and stop again).
@@ -3097,7 +3098,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         const tsStepFrame = (tsDirection) => {
             const tsFPS = tsResolveFPS();
             const tsTargetTime = tsResolveVideoFrameTime(
-                Number(tsPrimaryVideo.currentTime || 0),
+                tsClipTime(tsPrimaryVideo),
                 tsFPS,
                 tsDirection,
                 tsGetDuration(),
@@ -3118,9 +3119,9 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             try {
                 tsVideos.forEach((tsVideo) => {
                     try {
-                        tsVideo.currentTime = tsEdge > 0
-                            ? tsResolveLastFrameTime(Number(tsVideo.duration || 0), tsFPS)
-                            : 0;
+                        tsSetClipTime(tsVideo, tsEdge > 0
+                            ? tsResolveLastFrameTime(tsClipDuration(tsVideo), tsFPS)
+                            : 0);
                     } catch {
                         // no-op
                     }
@@ -3176,6 +3177,14 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 tsStartPlayback();
             }
         };
+        // obvpm fork: a clip's start became known once it loaded; a paused
+        // group lines it up with the others again
+        const tsHandleClipStart = () => {
+            if (!tsDesiredPlaying && !tsSeekDragging && !tsEachAtOwnEnd) {
+                tsApplySync("align");
+            }
+            tsUpdateTransport();
+        };
         const tsHandleVisibilityChange = () => {
             // Background timers are throttled to about once a second, so the
             // group can come back noticeably apart. Re-align once on return
@@ -3213,6 +3222,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsVideo.addEventListener("canplaythrough", tsHandleVideoReady);
             tsVideo.addEventListener("loadeddata", tsHandleVideoReady);
             tsVideo.addEventListener("error", tsHandleVideoReady);
+            tsVideo.addEventListener("tsforkclipstart", tsHandleClipStart);
         });
         document.addEventListener("visibilitychange", tsHandleVisibilityChange);
         tsUpdateTransport();
@@ -3249,6 +3259,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 tsVideo.removeEventListener("canplaythrough", tsHandleVideoReady);
                 tsVideo.removeEventListener("loadeddata", tsHandleVideoReady);
                 tsVideo.removeEventListener("error", tsHandleVideoReady);
+                tsVideo.removeEventListener("tsforkclipstart", tsHandleClipStart);
                 tsReleaseMediaSource(tsVideo);
             });
         };

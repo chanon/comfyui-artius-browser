@@ -18,6 +18,8 @@
 // pointerdown (reorder drag, copy). The x stops its own pointerdown, so a press
 // on it starts neither of those, nor a Split divider drag.
 
+import { tsClipTime } from "./ts-artius-browser-fork-clip-start.js";
+
 const TS_FORK_REMOVE_CSS = `
     /* obvpm fork: x after each clip's name in a video comparison */
     .ts-viewer .ts-video-compare-label[data-fork-removable] {
@@ -97,7 +99,8 @@ export function tsInstallForkCompareRemove(tsPanel) {
         const tsStage = tsViewerNow.tsRefs.tsStage;
         const tsOldPrimary = tsStage.querySelector('.ts-compare-video[data-primary="true"]')
             || tsStage.querySelector(".ts-compare-video");
-        const tsTime = Number(tsOldPrimary?.currentTime || 0);
+        // clip time: the new stage's seek bar is in clip time (fork-clip-start)
+        const tsTime = tsOldPrimary ? tsClipTime(tsOldPrimary) : 0;
         const tsPlaying = tsStage.querySelector(".ts-video-compare-shell .ts-video-play-toggle")
             ?.dataset.tsI18n === "button.pause";
         const tsWasFullScreen = Boolean(tsViewerNow.shadowRoot.fullscreenElement);
