@@ -18,7 +18,9 @@
 //   - tsApplyPreservedSelection: would drop the held ids on a background refresh.
 //   - tsGetSelectedItems: everything that acts on the selection reads it, so
 //     Compare, Download and the bar see the held clips too.
-//   - tsOpenViewer: upstream's looks in the list only.
+//   - tsOpenViewer: upstream's looks in the list only, and compares in the
+//     grid's order. With held clips, or a Multiple list (fork-multiple sets
+//     tsRefs.tsForkCompareInSelectionOrder), the comparison follows the selection.
 //   - tsRemoveItemsByIds: upstream's returns early for what is not on the list.
 //
 // A plain click, Esc, the bar's x and a click on the empty grid clear everything,
@@ -26,7 +28,7 @@
 // longer in the set is forgotten here. The bar says how many are held and names
 // them, and deleting one always asks and names it (fork-confirm).
 
-const TS_FORK_COMPARE_MAX = 4;
+const TS_FORK_COMPARE_MAX = 6;   // = TS_COMPARE_MAX_ITEMS (viewer-state)
 
 export function tsInstallForkKeepSelection(tsPanel) {
     const tsRefs = tsPanel?.tsRefs;
@@ -125,7 +127,8 @@ export function tsInstallForkKeepSelection(tsPanel) {
     const tsOpenViewer = tsPanel.tsOpenViewer;
     tsPanel.tsOpenViewer = function tsForkOpenViewer(tsAssetId, ...tsRest) {
         tsSettle();
-        if (tsHeld.size > 0 && tsSelection().has(tsAssetId)) {
+        const tsInOrder = tsHeld.size > 0 || Boolean(tsRefs.tsForkCompareInSelectionOrder?.());
+        if (tsInOrder && tsSelection().has(tsAssetId)) {
             const tsSelected = this.tsGetSelectedItems();
             const tsType = tsSelected.find((tsItem) => tsItem.id === tsAssetId)?.type;
             const tsCompare = (tsType === "image" || tsType === "video")

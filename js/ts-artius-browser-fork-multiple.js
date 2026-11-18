@@ -10,7 +10,9 @@
 //   - "Select all" in the row, or Ctrl+A anywhere in the panel outside a text
 //     box, selects every file listed (loading the pages not shown yet first).
 //     With a list, the selection follows the list's order, so Compare shows
-//     the clips in the order they were pasted.
+//     the clips in the order they were pasted. "Compare" in the row does the
+//     same, then opens the comparison (the first six of the list); so does
+//     Ctrl+Enter in the box.
 //   - Upstream's Prompt pill is hidden unless "Show Prompt search" is on in
 //     the settings popup (off by default). Hidden, the search looks at
 //     filenames only, and the empty grid offers Clear search instead of
@@ -84,6 +86,15 @@ const TS_FORK_MULTIPLE_CSS = `
     }
     .ts-fork-multiple-foot button {
         flex: none;
+    }
+    /* a list narrows the grid while the row is closed (as .ts-filters-toggle[data-applied]) */
+    .ts-toolbar-cluster.ts-search-cluster .ts-search-scope.ts-fork-multiple[data-applied="true"]::after {
+        content: "";
+        width: 5px;
+        height: 5px;
+        flex: 0 0 5px;
+        border-radius: 999px;
+        background: var(--ts-accent);
     }
 `;
 
@@ -164,13 +175,16 @@ export function tsInstallForkMultiple(tsPanel) {
     tsFoot.className = "ts-fork-multiple-foot";
     const tsStatus = document.createElement("span");
     tsStatus.className = "ts-fork-multiple-status";
+    const tsCompareButton = document.createElement("button");
+    tsCompareButton.type = "button";
+    tsCompareButton.className = "ts-filter-clear ts-fork-multiple-compare";
     const tsSelectAllButton = document.createElement("button");
     tsSelectAllButton.type = "button";
     tsSelectAllButton.className = "ts-filter-clear ts-fork-multiple-select";
     const tsClearButton = document.createElement("button");
     tsClearButton.type = "button";
     tsClearButton.className = "ts-filter-clear ts-fork-multiple-clear";
-    tsFoot.append(tsStatus, tsSelectAllButton, tsClearButton);
+    tsFoot.append(tsStatus, tsCompareButton, tsSelectAllButton, tsClearButton);
     tsRow.append(tsBox, tsFoot);
     tsRefs.tsFilterPanel.after(tsRow);
 
@@ -207,12 +221,15 @@ export function tsInstallForkMultiple(tsPanel) {
         tsScope.style.display = tsPromptShown ? "" : "none";
         tsPill.hidden = !tsAssetSection;
         tsPill.style.display = tsAssetSection ? "" : "none";
-        tsPill.dataset.active = String(tsActive());
+        const tsRowShown = tsAssetSection && tsOpen;
+        // like the Filters pill: lit while its row is shown, a small dot after the
+        // name while a list narrows the grid with the row closed
+        tsPill.dataset.active = String(tsRowShown);
+        tsPill.dataset.applied = String(tsActive() && !tsRowShown);
         tsPill.setAttribute("aria-pressed", String(tsOpen));
         tsPill.dataset.forkOpen = String(tsOpen);
         tsPromptToggle.dataset.active = String(tsShowPrompt);
         tsPromptToggle.setAttribute("aria-pressed", String(tsShowPrompt));
-        const tsRowShown = tsAssetSection && tsOpen;
         tsRow.hidden = !tsRowShown;
         tsRow.dataset.open = String(tsRowShown);
     };
@@ -250,11 +267,17 @@ export function tsInstallForkMultiple(tsPanel) {
         const tsParams = tsBuildSearchParams.call(this, tsCursorAfter, tsOverrides, ...tsRest);
         // an override without filters (upstream's background 3D query) lists everything
         const tsFiltersOff = tsOverrides && Object.prototype.hasOwnProperty.call(tsOverrides, "filters") && !tsOverrides.filters;
+        if (!tsFiltersOff) {
+            tsSentNames = tsActive() ? tsNames.join("\n") : "";
+        }
         if (tsActive() && !tsFiltersOff) {
             tsParams.set("names", tsNames.join("\n"));
         }
         return tsParams;
     };
+    // the list the grid's listing was asked for (null: not known yet)
+    let tsSentNames = null;
+    const tsListingIsCurrent = () => tsSentNames === (tsActive() ? tsNames.join("\n") : "");
 
     // ---- "not found" ----
     const tsMissingNames = () => {
@@ -270,6 +293,8 @@ export function tsInstallForkMultiple(tsPanel) {
         return tsNames.filter((tsName, tsIndex) => !tsFound.has(tsIndex));
     };
     const tsPaintStatus = () => {
+        // Compare needs a list and two files to show
+        tsCompareButton.disabled = !tsActive() || (tsState.tsItems || []).length < 2;
         if (!tsNames.length) {
             tsStatus.textContent = tsT("fork.multipleEmpty", "One file name per line, or any part of one. Paste a list to find all of them.");
             tsStatus.dataset.missing = "false";
@@ -314,7 +339,8 @@ export function tsInstallForkMultiple(tsPanel) {
         return tsEmpty;
     };
 
-    const tsSetNames = (tsNextText, tsFromBox = false) => {
+    // tsQuiet: no search of its own (fork-goto-folder clears the list and fetches itself)
+    const tsSetNames = (tsNextText, tsFromBox = false, tsQuiet = false) => {
         tsText = tsNextText;
         if (!tsFromBox) {
             tsBox.value = tsText;
@@ -322,10 +348,15 @@ export function tsInstallForkMultiple(tsPanel) {
         tsWriteStored(TS_FORK_NAMES_KEY, tsText);
         const tsNext = tsForkParseNames(tsText);
         const tsChanged = tsNext.join("\n") !== tsNames.join("\n");
+        const tsWasActive = tsActive();
         tsNames = tsNext;
-        tsPaintPills();
+        if (tsActive() !== tsWasActive) {
+            tsRelayout();       // the pill's small dot comes or goes: its width changes
+        } else {
+            tsPaintPills();
+        }
         tsPaintStatus();
-        if (tsChanged) {
+        if (tsChanged && !tsQuiet) {
             // a search, for keep-selection: the selection stays while the list is edited
             tsPanel.tsDebouncedSearch?.();
         }
@@ -343,12 +374,27 @@ export function tsInstallForkMultiple(tsPanel) {
 
     // ---- select all: the button, and Ctrl+A in the panel outside text boxes ----
     let tsSelectingAll = false;
+    // true once the selection holds every file listed
     const tsSelectAll = async () => {
         if (tsSelectingAll) {
-            return;
+            return false;
         }
         tsSelectingAll = true;
         try {
+            // A list just typed or pasted is still waiting for its search (debounced):
+            // wait for it, or the files of the previous listing would be selected.
+            // Not a fetch of our own: the waiting one would still run after it and
+            // clear the selection made here.
+            const tsWaitUntil = Date.now() + 10000;
+            while (tsAssets() && (tsState.tsLoading || !tsListingIsCurrent()) && Date.now() < tsWaitUntil) {
+                if (!tsState.tsLoading && tsSentNames === null) {
+                    tsPanel.tsDebouncedSearch?.();   // not known: ask once
+                    tsSentNames = undefined;
+                }
+                await (tsState.tsLoading && tsPanel.tsCurrentFetchPromise
+                    ? tsPanel.tsCurrentFetchPromise
+                    : new Promise((tsResolve) => setTimeout(tsResolve, 50)));
+            }
             // the pages not shown yet: every file of the listing, up to the cap
             let tsGuard = 0;
             while (tsGuard < 200) {
@@ -375,7 +421,7 @@ export function tsInstallForkMultiple(tsPanel) {
                     .map((tsEntry) => tsEntry.tsItem);
             }
             if (!tsItems.length) {
-                return;
+                return false;
             }
             tsPanel.tsClearSelection?.();
             for (const tsItem of tsItems) {
@@ -385,6 +431,7 @@ export function tsInstallForkMultiple(tsPanel) {
             tsState.tsLastSelectedIndex = tsPanel.tsItemIndexById?.get(tsItems[0].id) ?? 0;
             tsPanel.tsRenderSelectionButtons?.();
             tsPanel.tsRefreshCardSelection?.();
+            return true;
         } finally {
             tsSelectingAll = false;
             tsPaintStatus();
@@ -420,6 +467,21 @@ export function tsInstallForkMultiple(tsPanel) {
         tsBox.focus();
     });
     tsSelectAllButton.addEventListener("click", () => void tsSelectAll());
+    // Select all, then the bar's Compare: the first six of the list, in its order
+    const tsCompareAll = async () => {
+        if (tsActive() && await tsSelectAll()) {
+            tsPanel.tsCompareSelected?.();
+        }
+    };
+    tsCompareButton.addEventListener("click", () => void tsCompareAll());
+    // Ctrl+Enter in the box: the same as Compare
+    tsBox.addEventListener("keydown", (tsEvent) => {
+        if (tsEvent.key === "Enter" && (tsEvent.ctrlKey || tsEvent.metaKey) && !tsEvent.altKey && !tsEvent.shiftKey) {
+            tsEvent.preventDefault();
+            tsEvent.stopPropagation();
+            void tsCompareAll();
+        }
+    });
     tsPromptToggle.addEventListener("click", () => {
         tsShowPrompt = !tsShowPrompt;
         tsWriteStored(TS_FORK_SHOW_PROMPT_KEY, tsShowPrompt ? "1" : "0");
@@ -436,6 +498,8 @@ export function tsInstallForkMultiple(tsPanel) {
         tsPill.textContent = tsT("fork.multiple", "Multiple");
         tsPill.title = tsT("fork.multipleTip", "Find many files at once: one file name per line.");
         tsBox.placeholder = tsT("fork.multiplePlaceholder", "clip_00012.mp4\nclip_00031.mp4\nany part of a name");
+        tsCompareButton.textContent = tsT("button.compareSelected", "Compare");
+        tsCompareButton.title = tsT("fork.multipleCompareTip", "Select every file listed and compare them, in the list's order (the first six). Ctrl+Enter in the box does the same.");
         tsSelectAllButton.textContent = tsT("fork.selectAll", "Select all");
         tsSelectAllButton.title = tsT("fork.selectAllTip", "Select every file listed (Ctrl+A), in the list's order");
         tsClearButton.textContent = tsT("filter.clear", "Clear");
@@ -455,4 +519,7 @@ export function tsInstallForkMultiple(tsPanel) {
     tsRefs.tsForkMultiple = tsRow;
     tsRefs.tsForkMultiplePill = tsPill;
     tsRefs.tsForkSelectAll = tsSelectAll;
+    tsRefs.tsForkMultipleClearQuietly = () => tsSetNames("", false, true);
+    // keep-selection: with a list, a comparison shows the clips in the selection's order
+    tsRefs.tsForkCompareInSelectionOrder = tsActive;
 }
