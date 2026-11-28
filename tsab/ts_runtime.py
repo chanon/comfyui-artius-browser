@@ -17,6 +17,7 @@ from .ts_config import TSConfigStore
 from .ts_db import TSDatabase
 from .ts_db_schema import TS_DB_SCHEMA_VERSION
 from .ts_delete import TSDeleteService
+from .ts_fork_file_response import TSForkFileResponse
 from .ts_fork_watcher import TSForkFolderWatcher
 from .ts_display_proxy import (
     TS_DISPLAY_MODE_PROXY,
@@ -440,7 +441,8 @@ class TSAssetBrowserRuntime:
         # 404 rather than a FileResponse on a directory.
         if ts_preview_path is None or not ts_preview_path.is_file():
             raise TSWeb.HTTPNotFound()
-        return self._TSApplyPreviewCacheHeaders(TSWeb.FileResponse(ts_preview_path))
+        # obvpm fork: TSForkFileResponse, not TransmitFile (ts_fork_file_response.py)
+        return self._TSApplyPreviewCacheHeaders(TSForkFileResponse(ts_preview_path))
 
     def TSBuildFileResponse(self, ts_path: str | None = None, ts_asset_id: int | None = None) -> TSWeb.FileResponse:
         TSLogVerbose("runtime.file.response", asset_id=ts_asset_id, path=ts_path)
@@ -454,7 +456,7 @@ class TSAssetBrowserRuntime:
         ts_file_path = self._TSAuthorizeAssetPath(ts_row)
         if not ts_file_path.exists():
             raise TSWeb.HTTPNotFound()
-        return self._TSApplyRevalidateHeaders(TSWeb.FileResponse(ts_file_path))
+        return self._TSApplyRevalidateHeaders(TSForkFileResponse(ts_file_path))
 
     def TSBuildDisplayResponse(self, ts_asset_id: int, ts_force_proxy: bool = False) -> TSWeb.FileResponse:
         """The file the lightbox SHOWS: the original, or a converted copy.
@@ -472,7 +474,7 @@ class TSAssetBrowserRuntime:
         ts_type = str(ts_row["type"] or "")
         ts_mode = TSResolveRowDisplayMode(ts_row)
         if ts_mode != TS_DISPLAY_MODE_PROXY and not (ts_force_proxy and ts_type in {"image", "video"}):
-            return self._TSApplyRevalidateHeaders(TSWeb.FileResponse(ts_file_path))
+            return self._TSApplyRevalidateHeaders(TSForkFileResponse(ts_file_path))
         # Deliberately NOT under the per-asset lock: a conversion can take
         # minutes, and the detail request the lightbox sends at the same time
         # takes that lock - its panel would say "Loading..." for the whole
@@ -485,7 +487,7 @@ class TSAssetBrowserRuntime:
         # Explicit type: Python's mimetypes table on Windows has no ".webp",
         # and the copy went out as application/octet-stream.
         ts_content_type = TS_DISPLAY_PROXY_CONTENT_TYPES.get(ts_proxy_path.suffix.lower(), "application/octet-stream")
-        ts_response = TSWeb.FileResponse(ts_proxy_path, headers={"Content-Type": ts_content_type})
+        ts_response = TSForkFileResponse(ts_proxy_path, headers={"Content-Type": ts_content_type})
         # The URL carries the asset's content token, so a given URL always
         # means the same bytes.
         ts_response.headers["Cache-Control"] = "private, max-age=31536000, immutable"
