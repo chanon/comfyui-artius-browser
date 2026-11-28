@@ -131,10 +131,25 @@ export function tsForkParseNames(tsText) {
     return tsNames;
 }
 
+// Whether a lower-cased filename contains a list line, "*" in the line standing
+// for any text (the server's LIKE pattern, ts_db_query.TSForkSearchPattern).
+// Each piece is taken at its first place after the previous one.
+function tsForkLineMatches(tsLowerFilename, tsName) {
+    let tsAt = 0;
+    for (const tsPiece of tsName.toLowerCase().split("*")) {
+        const tsFound = tsLowerFilename.indexOf(tsPiece, tsAt);
+        if (tsFound < 0) {
+            return false;
+        }
+        tsAt = tsFound + tsPiece.length;
+    }
+    return true;
+}
+
 // Index of the first list line a filename contains, or -1.
 function tsForkLineIndex(tsNames, tsFilename) {
     const tsLower = String(tsFilename || "").normalize("NFC").toLowerCase();
-    return tsNames.findIndex((tsName) => tsLower.includes(tsName.toLowerCase()));
+    return tsNames.findIndex((tsName) => tsForkLineMatches(tsLower, tsName));
 }
 
 export function tsInstallForkMultiple(tsPanel) {
@@ -285,7 +300,7 @@ export function tsInstallForkMultiple(tsPanel) {
         for (const tsItem of tsState.tsItems || []) {
             const tsLower = String(tsItem?.filename || "").normalize("NFC").toLowerCase();
             tsNames.forEach((tsName, tsIndex) => {
-                if (!tsFound.has(tsIndex) && tsLower.includes(tsName.toLowerCase())) {
+                if (!tsFound.has(tsIndex) && tsForkLineMatches(tsLower, tsName)) {
                     tsFound.add(tsIndex);
                 }
             });

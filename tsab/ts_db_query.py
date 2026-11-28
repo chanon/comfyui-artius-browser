@@ -20,6 +20,12 @@ def TSForkEscapeLike(ts_text: str) -> str:
     return str(ts_text).replace("\\", r"\\").replace("%", r"\%").replace("_", r"\_")
 
 
+# obvpm fork: a search part as a LIKE pattern, found anywhere in the name;
+# "*" inside it stands for any text (none too): "nightsmoke*fl2va".
+def TSForkSearchPattern(ts_term: str) -> str:
+    return "%" + TSForkEscapeLike(ts_term).replace("*", "%") + "%"
+
+
 # obvpm fork: the search box's parts, split on spaces, in NFC like the index.
 def TSForkSearchTerms(ts_text: str) -> list[str]:
     return [ts_term for ts_term in TSNormalizeSearchText(ts_text).split() if ts_term]
@@ -61,10 +67,10 @@ def TSBuildAssetQueryParts(
             # ANYWHERE in the name. The FTS index only matches whole words or
             # their start, so a name minus its first letter, or a pasted name
             # holding a lone "+" or "-" (a word with no letters, which matches
-            # nothing), found nothing.
+            # nothing), found nothing. A "*" in a part stands for any text.
             for ts_term in TSForkSearchTerms(ts_search_text):
                 ts_where_clauses.append("assets_view.filename LIKE ? ESCAPE '\\' COLLATE NOCASE")
-                ts_parameters.append(f"%{TSForkEscapeLike(ts_term)}%")
+                ts_parameters.append(TSForkSearchPattern(ts_term))
         elif ts_fts_query:
             ts_from_sql = "assets_view INNER JOIN assets_fts ON assets_fts.rowid = assets_view.id"
             if ts_search_prompts:
@@ -89,13 +95,14 @@ def TSBuildAssetQueryParts(
                 ts_parameters.append(f"%{ts_search_value}%")
 
     # obvpm fork: the panel's "Multiple" list -- one name per line, a file shows
-    # when its name contains ANY line (as typed: spaces and punctuation count).
+    # when its name contains ANY line (as typed: spaces and punctuation count;
+    # "*" is any text, as in the search box).
     ts_names = [ts_name for ts_name in (ts_filters.get("names") or []) if ts_name]
     if ts_names:
         ts_where_clauses.append(
             "(" + " OR ".join("assets_view.filename LIKE ? ESCAPE '\\' COLLATE NOCASE" for _ in ts_names) + ")"
         )
-        ts_parameters.extend(f"%{TSForkEscapeLike(ts_name)}%" for ts_name in ts_names)
+        ts_parameters.extend(TSForkSearchPattern(ts_name) for ts_name in ts_names)
 
     if ts_filters.get("types"):
         ts_types = list(ts_filters["types"])
